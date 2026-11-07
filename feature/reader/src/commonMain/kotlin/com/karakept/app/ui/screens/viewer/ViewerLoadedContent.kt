@@ -41,7 +41,7 @@ import com.karakept.app.ui.components.FloatingBusyCard
 import com.karakept.app.ui.components.LoadingDotsIndicator
 import com.karakept.app.ui.components.RefreshableBox
 import com.karakept.app.ui.components.highlight.HighlightPosition
-import com.karakept.app.ui.components.reader.BookmarkContentLoader
+import com.karakept.app.ui.components.reader.ReaderResumeSkeleton
 import com.karakept.app.ui.components.reader.GalleryViewerState
 import com.karakept.app.ui.components.reader.ImageGalleryOverlay
 import com.karakept.app.ui.components.reader.LocalGalleryViewerState
@@ -324,10 +324,10 @@ internal fun ViewerLoadedContent(
             visible = restoringToSavedPosition,
             animated = !einkMode.animationsDisabled
         ) {
-            BookmarkContentLoader(
-                loadingState = BookmarkLoadingState.Initial,
+            ReaderResumeSkeleton(
                 modifier = Modifier.fillMaxSize()
-                    .background(MaterialTheme.colorScheme.background)
+                    .background(MaterialTheme.colorScheme.background),
+                topInset = with(density) { chromeInsets.topPx.toDp() }
             )
         }
 
@@ -358,7 +358,12 @@ internal fun ViewerLoadedContent(
             showStickyTitle = shouldShowStickyTitle(showStickyTitle, restoringToSavedPosition),
             showMenu = ui.showMenu,
             toolbarHeight = toolbarHeight,
-            readingProgress = if (trackReadingProgress) readingProgress else 0f,
+            readingProgress = displayedReadingProgress(
+                trackReadingProgress = trackReadingProgress,
+                restoringToSavedPosition = restoringToSavedPosition,
+                savedProgress = state.bookmark.readingProgress,
+                liveProgress = readingProgress
+            ),
             isRefreshing = isRefreshing,
             onBackClick = onBack, onMenuToggle = { ui.showMenu = it },
             onAppearanceClick = { ui.showAppearancePanel = true },

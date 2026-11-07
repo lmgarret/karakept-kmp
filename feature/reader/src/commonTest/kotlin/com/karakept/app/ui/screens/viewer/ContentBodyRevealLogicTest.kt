@@ -1,6 +1,7 @@
 package com.karakept.app.ui.screens.viewer
 
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -103,6 +104,41 @@ class ContentBodyRevealLogicTest {
     @Test
     fun restoreOverlay_hidden_whenRestoreAlreadyDone() {
         assertFalse(shouldShowRestoreOverlay(needsScrollRestore = false, readingProgress = 0.5f))
+    }
+
+    // displayedReadingProgress ---------------------------------------------------
+
+    @Test
+    fun progressBar_showsSavedPosition_whileRestoring() {
+        assertEquals(
+            0.6f,
+            displayedReadingProgress(
+                trackReadingProgress = true, restoringToSavedPosition = true,
+                savedProgress = 0.6f, liveProgress = 0f
+            )
+        )
+    }
+
+    @Test
+    fun progressBar_followsScroll_onceRestored() {
+        assertEquals(
+            0.3f,
+            displayedReadingProgress(
+                trackReadingProgress = true, restoringToSavedPosition = false,
+                savedProgress = 0.6f, liveProgress = 0.3f
+            )
+        )
+    }
+
+    @Test
+    fun progressBar_empty_whenTrackingDisabled() {
+        assertEquals(
+            0f,
+            displayedReadingProgress(
+                trackReadingProgress = false, restoringToSavedPosition = true,
+                savedProgress = 0.6f, liveProgress = 0.3f
+            )
+        )
     }
 
     // shouldShowStickyTitle ------------------------------------------------------

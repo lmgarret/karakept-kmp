@@ -21,6 +21,7 @@ internal fun ViewerInitialContent(
     state: BookmarkLoadingState,
     initialTitle: String?,
     initialUrl: String?,
+    initialReadingProgress: Float,
     toolbarHeight: Dp,
     padding: PaddingValues,
     onBack: () -> Unit
@@ -38,7 +39,7 @@ internal fun ViewerInitialContent(
                 showStickyTitle = true,
                 showMenu = false,
                 toolbarHeight = toolbarHeight,
-                readingProgress = 0f,
+                readingProgress = initialReadingProgress,
                 onBackClick = onBack,
                 onMenuToggle = {},
                 onAppearanceClick = {},

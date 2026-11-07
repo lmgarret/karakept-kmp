@@ -45,6 +45,7 @@ fun BookmarkViewerContent(
     searchTrigger: Int = 0,
     initialTitle: String? = null,
     initialUrl: String? = null,
+    initialReadingProgress: Float? = null,
     screenModel: BookmarkViewerScreenModel,
     onBack: () -> Unit,
     onTagFilterApply: (tag: String) -> Unit,
@@ -326,6 +327,15 @@ fun BookmarkViewerContent(
                 state = state,
                 initialTitle = initialTitle,
                 initialUrl = initialUrl,
+                initialReadingProgress = displayedReadingProgress(
+                    trackReadingProgress = trackReadingProgress,
+                    restoringToSavedPosition = shouldShowRestoreOverlay(
+                        needsScrollRestore = true,
+                        readingProgress = initialReadingProgress ?: 0f
+                    ),
+                    savedProgress = initialReadingProgress ?: 0f,
+                    liveProgress = 0f
+                ),
                 toolbarHeight = toolbarHeight,
                 padding = padding,
                 onBack = onBack

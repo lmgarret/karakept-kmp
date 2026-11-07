@@ -378,6 +378,7 @@ fun MainScreenExpandedLayout(
                             searchTrigger = readerSearchTrigger,
                             initialTitle = selectedBookmark?.title,
                             initialUrl = selectedBookmark?.url,
+                            initialReadingProgress = selectedBookmark?.readingProgress,
                             screenModel = viewerScreenModel,
                             onBack = {
                                 if (isReaderFullscreen) {

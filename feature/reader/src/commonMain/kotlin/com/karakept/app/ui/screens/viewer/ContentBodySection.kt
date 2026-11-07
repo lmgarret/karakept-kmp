@@ -289,3 +289,19 @@ internal fun shouldShowStickyTitle(
     scrolledPastBanner: Boolean,
     restoringToSavedPosition: Boolean
 ): Boolean = scrolledPastBanner || restoringToSavedPosition
+
+/**
+ * What the top bar's progress bar shows. While the restore overlay is up the list still sits at
+ * the top, so the live value reads 0 and would then jump; the saved position is where the reader
+ * is about to land, so that is shown until the restore completes.
+ */
+internal fun displayedReadingProgress(
+    trackReadingProgress: Boolean,
+    restoringToSavedPosition: Boolean,
+    savedProgress: Float,
+    liveProgress: Float
+): Float = when {
+    !trackReadingProgress -> 0f
+    restoringToSavedPosition -> savedProgress.coerceIn(0f, 1f)
+    else -> liveProgress
+}
