@@ -86,6 +86,7 @@ fun HtmlContent(
     onSearchMatchPosition: (Float) -> Unit = {}
 ) {
     val appDispatchers = koinInject<AppDispatchers>()
+    val openMark = remember(html) { kotlin.time.TimeSource.Monotonic.markNow() }
 
     // Process HTML based on viewer mode asynchronously
     val processedHtml by produceState<String?>(initialValue = null, html, viewerMode, removeFirstImage, localFilePath) {
