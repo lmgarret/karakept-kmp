@@ -38,6 +38,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.input.pointer.AwaitPointerEventScope
+import androidx.compose.ui.input.pointer.PointerInputChange
+import androidx.compose.ui.input.pointer.changedToUpIgnoreConsumed
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
@@ -55,6 +58,7 @@ import com.karakept.app.ui.utils.readerScrollTarget
 import com.karakept.app.ui.utils.sectionIndexAt
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlin.math.abs
 import kotlin.math.min
 import kotlin.math.roundToInt
 
@@ -195,8 +199,20 @@ fun ReaderScrollCursor(
                     val down = awaitFirstDown(requireUnconsumed = false)
                     if (down.position.x < size.width - touchTargetWidthPx) return@awaitEachGesture
                     down.consume()
+                    // Nothing moves until the press proves to be the cursor's. The track sits on the
+                    // right edge, where Android's back gesture starts too: the system cancels the
+                    // press once it recognises the swipe, by which point jumping on the down had
+                    // already scrolled the article.
+                    val start = when (val intent = awaitCursorIntent(down, viewConfiguration.touchSlop)) {
+                        CursorIntent.Abandoned -> return@awaitEachGesture
+                        CursorIntent.Tap -> {
+                            requestScroll(thumbUnder(down.position.y))
+                            return@awaitEachGesture
+                        }
+                        is CursorIntent.Drag -> intent.change
+                    }
                     isDragging = true
-                    dragThumb = thumbUnder(down.position.y)
+                    dragThumb = thumbUnder(start.position.y)
                     if (followDrag) requestScroll(dragThumb)
                     drag(down.id) { change ->
                         change.consume()
@@ -261,6 +277,42 @@ fun ReaderScrollCursor(
             trackHeightPx = trackHeightPx,
             modifier = Modifier.align(Alignment.TopEnd)
         )
+    }
+}
+
+private sealed interface CursorIntent {
+    data object Abandoned : CursorIntent
+    data object Tap : CursorIntent
+    class Drag(val change: PointerInputChange) : CursorIntent
+}
+
+/**
+ * What a press on the track turns out to be: a vertical drag once it travels [touchSlop] mostly
+ * vertically, a tap if it lifts within the slop, and nothing otherwise — a horizontal swipe (the
+ * system back gesture from the right edge) or a cancelled press, which arrives as a consumed up.
+ */
+private suspend fun AwaitPointerEventScope.awaitCursorIntent(
+    down: PointerInputChange,
+    touchSlop: Float
+): CursorIntent {
+    while (true) {
+        val change = awaitPointerEvent().changes.firstOrNull { it.id == down.id }
+            ?: return CursorIntent.Abandoned
+        val delta = change.position - down.position
+        if (change.changedToUpIgnoreConsumed()) {
+            return if (!change.isConsumed && delta.getDistance() <= touchSlop) {
+                change.consume()
+                CursorIntent.Tap
+            } else {
+                CursorIntent.Abandoned
+            }
+        }
+        if (change.isConsumed) return CursorIntent.Abandoned
+        if (abs(delta.y) > touchSlop && abs(delta.y) >= abs(delta.x)) {
+            change.consume()
+            return CursorIntent.Drag(change)
+        }
+        if (abs(delta.x) > touchSlop) return CursorIntent.Abandoned
     }
 }
 

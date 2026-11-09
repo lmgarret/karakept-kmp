@@ -259,4 +259,45 @@ class ReaderScrollCursorDragTest {
         val uneven = deltas.filter { kotlin.math.abs(it - typical) > 2f }
         assertTrue(uneven.isEmpty(), "steps of ${deltas.map { it.toInt() }}")
     }
+
+    @Test
+    fun aSwipeInFromTheEdgeDoesNotScroll() = runScene { scene ->
+        // Android's back gesture starts on the same edge as the track, and the system cancels the
+        // press once it recognises the swipe. Jumping on the down had already scrolled the article.
+        val x = with(density) { 400.dp.toPx() } - 4f
+        val y = scene.listTopInRoot() + scene.viewportPx * 0.75f
+        onRoot().performTouchInput {
+            down(Offset(x, y))
+            moveTo(Offset(x - 40f, y))
+            moveTo(Offset(x - 120f, y + 4f))
+            cancel()
+        }
+        waitForIdle()
+        assertEquals(0f, runOnIdle { scene.scrolledPx() })
+        assertEquals(null, bubbleCenter())
+    }
+
+    @Test
+    fun aCancelledPressOnTheTrackDoesNotScroll() = runScene { scene ->
+        val x = with(density) { 400.dp.toPx() } - 4f
+        val y = scene.listTopInRoot() + scene.viewportPx * 0.75f
+        onRoot().performTouchInput {
+            down(Offset(x, y))
+            cancel()
+        }
+        waitForIdle()
+        assertEquals(0f, runOnIdle { scene.scrolledPx() })
+    }
+
+    @Test
+    fun aTapOnTheTrackStillJumps() = runScene { scene ->
+        val x = with(density) { 400.dp.toPx() } - 4f
+        val y = scene.listTopInRoot() + scene.viewportPx * 0.75f
+        onRoot().performTouchInput {
+            down(Offset(x, y))
+            up()
+        }
+        waitForIdle()
+        assertTrue(runOnIdle { scene.scrolledPx() } > 0f)
+    }
 }
