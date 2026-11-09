@@ -515,6 +515,14 @@ else in its list item reuses its recording rather than re-recording 300k px of t
 layer `drawnOnlyWhen` draws nothing until the build is complete — Android re-records a changed layer
 whether or not its parent draws it, so hiding it from outside the layer saves nothing.
 
+Once shown, only the top-level blocks near the viewport draw (`ReaderDrawCuller`,
+`ReaderDrawCulling.kt`): each block sits in a layer of its own and records nothing while it is off
+screen, so showing an article records about a screenful of text rather than all of it, and a scroll
+re-records only the block that comes into view. Composition and layout stay eager — page snapping,
+scroll restoration, the end-of-article marker and the table of contents all read laid-out blocks.
+The window is pushed from one `onGloballyPositioned` on the article; blocks are found in it by
+binary search over their coordinates, never by a per-block callback. `ReaderDrawCullingTest` pins it.
+
 > **Rule:** `onLoaded` fires only once every block is composed. Scroll restoration, the progress
 > fallback, `blankBelowContent`, page snapping and progress saving (gated on `contentRendered`)
 > all read the article's height, and must never see a partial one. `ReaderRevealTest` pins this.

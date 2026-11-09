@@ -25,6 +25,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.layout
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.node.ModifierNodeElement
@@ -236,6 +237,7 @@ fun NativeHtmlRenderer(
                     mutableStateOf(minOf(INITIAL_REVEAL_BLOCKS, renderableChildren.size))
                 }
                 val fullyRevealed = visibleCount >= renderableChildren.size
+                val culler = remember(document) { ReaderDrawCuller(renderableChildren.size) }
 
                 Column(
                     modifier = modifier
@@ -246,6 +248,9 @@ fun NativeHtmlRenderer(
                         // Inside the layer, which is re-recorded on every batch otherwise: nothing
                         // shows the article before it is complete, so it is drawn once, then.
                         .drawnOnlyWhen(fullyRevealed)
+                        // One callback for the whole article, run on every scroll frame: it only
+                        // moves the window, and re-draws just the blocks that enter or leave it.
+                        .onGloballyPositioned(culler::onArticlePositioned)
                         // Measured for the reveal's frame budget.
                         .layout { measurable, constraints ->
                             val mark = TimeSource.Monotonic.markNow()
@@ -280,35 +285,37 @@ fun NativeHtmlRenderer(
 
                 SideEffect { revealMeter.record(composeMark.elapsedNow()) }
 
-                // Render visible children
-                for (span in renderableChildren.take(visibleCount)) {
-                    val child = span.node
-                    val inlineNodes = span.inlineNodes
-                    if (inlineNodes != null) {
-                        RenderInlineGroup(
-                            inlineNodes, LocalReaderTheme.current, resolvedHighlights, offsets,
-                            onLinkClick, onHighlightClick, onHighlightPosition, selectedHighlightId
-                        )
-                    } else if (child is com.fleeksoft.ksoup.nodes.Element && isBlockElement(child)) {
-                        RenderBlock(child, resolvedHighlights, offsets, onLinkClick, onHighlightClick, onHighlightPosition, selectedHighlightId = selectedHighlightId)
-                    } else if (child is com.fleeksoft.ksoup.nodes.TextNode) {
-                        val text = child.getWholeText()
-                        val currentTheme = LocalReaderTheme.current
-                        val runs = TextRuns().apply { record(0, span.startOffset, text.length) }
-                        AnnotatedClickableText(
-                            text = applyHighlightSpans(
-                                AnnotatedString(text), runs, resolvedHighlights, currentTheme, searchState
-                            ),
-                            onLinkClick = onLinkClick,
-                            onHighlightClick = onHighlightClick,
-                            onHighlightPosition = onHighlightPosition,
-                            color = currentTheme.textColor,
-                            fontSize = currentTheme.fontSize,
-                            fontFamily = currentTheme.fontFamily,
-                            lineHeight = currentTheme.bodyLineHeight,
-                            selectedHighlightId = selectedHighlightId,
-                            highlights = resolvedHighlights
-                        )
+                // Each block in a layer of its own, drawn only near the viewport: see ReaderDrawCuller.
+                for ((index, span) in renderableChildren.take(visibleCount).withIndex()) {
+                    Column(Modifier.graphicsLayer().culledBy(culler, index)) {
+                        val child = span.node
+                        val inlineNodes = span.inlineNodes
+                        if (inlineNodes != null) {
+                            RenderInlineGroup(
+                                inlineNodes, LocalReaderTheme.current, resolvedHighlights, offsets,
+                                onLinkClick, onHighlightClick, onHighlightPosition, selectedHighlightId
+                            )
+                        } else if (child is com.fleeksoft.ksoup.nodes.Element && isBlockElement(child)) {
+                            RenderBlock(child, resolvedHighlights, offsets, onLinkClick, onHighlightClick, onHighlightPosition, selectedHighlightId = selectedHighlightId)
+                        } else if (child is com.fleeksoft.ksoup.nodes.TextNode) {
+                            val text = child.getWholeText()
+                            val currentTheme = LocalReaderTheme.current
+                            val runs = TextRuns().apply { record(0, span.startOffset, text.length) }
+                            AnnotatedClickableText(
+                                text = applyHighlightSpans(
+                                    AnnotatedString(text), runs, resolvedHighlights, currentTheme, searchState
+                                ),
+                                onLinkClick = onLinkClick,
+                                onHighlightClick = onHighlightClick,
+                                onHighlightPosition = onHighlightPosition,
+                                color = currentTheme.textColor,
+                                fontSize = currentTheme.fontSize,
+                                fontFamily = currentTheme.fontFamily,
+                                lineHeight = currentTheme.bodyLineHeight,
+                                selectedHighlightId = selectedHighlightId,
+                                highlights = resolvedHighlights
+                            )
+                        }
                     }
                 }
 
