@@ -19,7 +19,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
-import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Rect as ComposeRect
 import androidx.compose.ui.graphics.Color
@@ -258,12 +257,6 @@ fun NativeHtmlRenderer(
                             val placeable = measurable.measure(constraints)
                             revealMeter.record(mark.elapsedNow())
                             layout(placeable.width, placeable.height) { placeable.place(0, 0) }
-                        }
-                        .drawWithContent {
-                            val mark = TimeSource.Monotonic.markNow()
-                            drawContent()
-                            val ms = mark.elapsedNow().inWholeMilliseconds
-                            if (ms >= 2) ReaderPerf.log("article draw: $ms ms")
                         }
                         .fillMaxWidth()
                         .padding(horizontal = typography.horizontalMarginDp.dp, vertical = 0.dp)

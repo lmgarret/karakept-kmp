@@ -91,7 +91,6 @@ internal class ReaderDrawCuller(blockCount: Int) {
         }
         val nowDrawn = drawnIndices()
         if (wasDrawn == nowDrawn) return
-        ReaderPerf.log("culling: drawing blocks $nowDrawn of ${blocks.size}")
         val from = minOf(wasDrawn.first, nowDrawn.first).coerceAtLeast(0)
         val to = maxOf(wasDrawn.last, nowDrawn.last).coerceAtMost(blocks.lastIndex)
         for (i in from..to) {

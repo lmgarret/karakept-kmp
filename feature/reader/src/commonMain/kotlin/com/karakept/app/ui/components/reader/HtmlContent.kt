@@ -86,7 +86,6 @@ fun HtmlContent(
     onSearchMatchPosition: (Float) -> Unit = {}
 ) {
     val appDispatchers = koinInject<AppDispatchers>()
-    val openMark = remember(html) { kotlin.time.TimeSource.Monotonic.markNow() }
 
     // Process HTML based on viewer mode asynchronously
     val processedHtml by produceState<String?>(initialValue = null, html, viewerMode, removeFirstImage, localFilePath) {
@@ -142,14 +141,6 @@ fun HtmlContent(
         if (prepared != null) onDocumentPrepared(prepared) else isContentLoaded = true
         value = prepared
     }
-
-    androidx.compose.runtime.LaunchedEffect(isContentLoaded) {
-        if (!isContentLoaded) return@LaunchedEffect
-        ReaderPerf.log("loaded +${openMark.elapsedNow().inWholeMilliseconds} ms since open")
-        androidx.compose.runtime.withFrameNanos { }
-        ReaderPerf.log("first frame after loaded +${openMark.elapsedNow().inWholeMilliseconds} ms since open")
-    }
-    ReaderFrameGapLogger(key = html)
 
     // Notify parent when both processed and loaded
     androidx.compose.runtime.LaunchedEffect(processedHtml, isContentLoaded) {
