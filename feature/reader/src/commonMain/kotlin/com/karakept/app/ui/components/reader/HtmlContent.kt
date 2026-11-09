@@ -142,6 +142,14 @@ fun HtmlContent(
         value = prepared
     }
 
+    androidx.compose.runtime.LaunchedEffect(isContentLoaded) {
+        if (!isContentLoaded) return@LaunchedEffect
+        ReaderPerf.log("loaded +${openMark.elapsedNow().inWholeMilliseconds} ms since open")
+        androidx.compose.runtime.withFrameNanos { }
+        ReaderPerf.log("first frame after loaded +${openMark.elapsedNow().inWholeMilliseconds} ms since open")
+    }
+    ReaderFrameGapLogger(key = html)
+
     // Notify parent when both processed and loaded
     androidx.compose.runtime.LaunchedEffect(processedHtml, isContentLoaded) {
         if (processedHtml != null && isContentLoaded && onReady != null) {
