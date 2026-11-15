@@ -237,7 +237,7 @@ internal class BookmarkViewQueries(private val bookmarkDao: BookmarkDao) {
                description, imageUrl, bannerImageAssetId, screenshotAssetId, tags, listIds, isStarred, isArchived,
                isRead, createdAt, readingTimeMinutes, readingProgress, readingScrollIndex, readingScrollOffset,
                modifiedAt, progressSyncedAt,
-               '' as content"""
+               hasContent, '' as content"""
 
         /**
          * Builds the paged query. Lives in the companion so a test can page a real SQLite
@@ -328,8 +328,8 @@ internal class BookmarkViewQueries(private val bookmarkDao: BookmarkDao) {
 
             when (filter.contentFilter) {
                 ContentFilter.ALL -> Unit
-                ContentFilter.DOWNLOADED -> conditions += "readingTimeMinutes > 0"
-                ContentFilter.NOT_DOWNLOADED -> conditions += "readingTimeMinutes = 0"
+                ContentFilter.DOWNLOADED -> conditions += "hasContent = 1"
+                ContentFilter.NOT_DOWNLOADED -> conditions += "hasContent = 0"
             }
 
             return SqlPredicate(conditions.joinToString(" AND "), binds)

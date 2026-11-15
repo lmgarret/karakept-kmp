@@ -7,6 +7,10 @@ import com.karakept.app.data.cache.NoThumbnailCache
 import com.karakept.app.data.cache.ThumbnailCache
 import com.karakept.app.data.local.entity.AssetEntity
 import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.local.entity.toBookmark
+import com.karakept.app.data.model.ContentFilter
+import com.karakept.app.data.model.FilterConfig
+import com.karakept.app.data.repository.BookmarkRepository
 import com.karakept.app.data.local.migrations.MIGRATION_14_15
 import com.karakept.app.data.local.migrations.MIGRATION_15_16
 import com.karakept.app.data.local.migrations.withAppSchema
@@ -28,6 +32,7 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
 
@@ -150,6 +155,32 @@ class OfflineCacheCleanupTest {
         assertEquals("<p>body</p>", row("recent").content)
         assertEquals("<p>body</p>", row("archived").content, "archived but unread keeps its copy")
         assertEquals("<p>body</p>", row("unread").content)
+        db.close()
+    }
+
+    @Test
+    fun `an evicted row reads as not downloaded in the list though it keeps its reading time`() = runBlocking {
+        db.bookmarkDao().insertBookmark(
+            bookmark("old", isRead = true, readOrArchivedAt = now - 8 * DAY_MILLIS).copy(readingTimeMinutes = 6)
+        )
+        db.bookmarkDao().insertBookmark(bookmark("kept").copy(readingTimeMinutes = 4))
+
+        cleaner(retentionDays = 7).cleanUp()
+
+        // What the bookmark list renders from: a list projection, mapped to the domain model.
+        val listed = db.bookmarkDao().getBookmarksForServer(serverId).first()
+            .map { it.toBookmark() }.associateBy { it.remoteId }
+        with(listed.getValue("old")) {
+            assertEquals(false, hasOfflineCopy, "the row must not look synced once its copy is gone")
+            assertEquals(6, readingTimeMinutes, "eviction leaves the reading time, so it is no proxy")
+        }
+        assertEquals(true, listed.getValue("kept").hasOfflineCopy)
+
+        suspend fun view(filter: ContentFilter) = db.bookmarkDao().getBookmarksPaged(
+            BookmarkRepository.buildPagedQuery(serverId, FilterConfig(contentFilter = filter), limit = 100)
+        ).map { it.remoteId }
+        assertEquals(listOf("old"), view(ContentFilter.NOT_DOWNLOADED))
+        assertEquals(listOf("kept"), view(ContentFilter.DOWNLOADED))
         db.close()
     }
 

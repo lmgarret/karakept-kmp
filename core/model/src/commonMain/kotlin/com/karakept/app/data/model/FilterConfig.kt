@@ -29,8 +29,8 @@ enum class ReadFilter {
 
 enum class ContentFilter {
     ALL,
-    DOWNLOADED,     // readingTimeMinutes > 0
-    NOT_DOWNLOADED  // readingTimeMinutes == 0
+    DOWNLOADED,     // hasContent = 1 (a stored body, not a reading time — evictions keep that)
+    NOT_DOWNLOADED  // hasContent = 0
 }
 
 enum class SortOption {

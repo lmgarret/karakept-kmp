@@ -67,6 +67,17 @@ Sync also skips anything with `offlineEvictedAt` set (`OfflineRetention.skipsCon
 reader stores such a bookmark again when it is opened, and any write of the body clears the
 marker — so the cap evicts what nobody reads, and reading something brings it back.
 
+## What "has a copy" means
+
+`bookmarks.hasContent` is the one answer to whether a bookmark has an offline copy: the offline
+view (`OFFLINE_PREDICATE`), the *Downloaded* / *Not downloaded* content filter, and the list row,
+which reads it as `Bookmark.hasOfflineCopy` (every list projection selects the column) and shows
+the not-synced badge in offline mode when it is false. Every eviction above clears it along with
+the body. None of them touches `readingTimeMinutes`, measured from the body when it was stored
+and kept as the row's displayed reading time — so it is never a proxy for a stored body. Sync's own `readingTimeMinutes == 0` check in
+`syncContent` is on freshly mapped entities, whose reading time `mapDtoToEntity` resets when no
+body is kept.
+
 ## Storage card
 
 The top of *Settings → Sync & Data → Offline Storage* shows what Karakept takes on the device

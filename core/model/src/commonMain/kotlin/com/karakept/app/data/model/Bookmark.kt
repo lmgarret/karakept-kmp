@@ -6,8 +6,10 @@ import androidx.compose.runtime.Immutable
  * A bookmark as everything above the data layer sees it.
  *
  * The Room row (`BookmarkEntity`) also carries bookkeeping only the data layer reads — sync
- * cursors, offline-cache stamps, the indexed `hasContent` flag — which is deliberately absent
- * here, so the entity can stay private to the data layer.
+ * cursors, offline-cache stamps — which is deliberately absent here, so the entity can stay
+ * private to the data layer. The one exception is [hasOfflineCopy], the entity's indexed
+ * `hasContent` flag: list rows never carry [content], and the row needs to know whether a stored
+ * body exists. [readingTimeMinutes] is not that signal — evicting a copy leaves it in place.
  */
 @Immutable
 data class Bookmark(
@@ -35,5 +37,8 @@ data class Bookmark(
     val crawledAt: Long? = null,
     // AI summary generated server-side; distinct from [description], read from the page's meta tags.
     val summary: String? = null,
-    val summarizationStatus: String? = null // "success" | "failure" | "pending"
+    val summarizationStatus: String? = null, // "success" | "failure" | "pending"
+    // Whether an article body is stored locally, read offline. Set on list rows too, which
+    // project `content` away.
+    val hasOfflineCopy: Boolean = false
 )
