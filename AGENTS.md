@@ -287,6 +287,26 @@ own width without a subcomposition, and doing that per row in a `LazyColumn` is 
 A row wrapper (`SwipeableBookmarkItem`, `QuickActionBookmarkItem`) takes `flat` so the row goes
 full-bleed and its divider reaches both edges.
 
+### List membership
+
+**`ListMembershipDialog`** (`ui/components/ListMembershipDialog.kt`)
+- A checkbox per manual list, applied together on "Done" as a `ListMembershipChange` (lists to add
+  to, lists to remove from). Takes the list ids of every bookmark being edited, so the same sheet
+  serves one bookmark and a batch selection — a list only some of the selection is in shows as
+  indeterminate and is left alone unless tapped.
+- Pass `isLoading` while the lists or the memberships are still on their way: the sheet shows a
+  `BusyIndicator` and disables "Done", so "loading" never reads as "no lists". A batch caller
+  reads the memberships of the whole selection (`selectedBookmarksListIds`), not the rows on
+  screen — a list shown as holding all of a partly loaded selection could never be added to the
+  rest.
+- The state logic is `ListMembershipUtils` (`domain/ListMembershipUtils.kt`), which also breaks a
+  change into per-list operations that undo by inverting.
+
+> **Rule:** a bookmark can be in any number of lists. Adding it to one never removes it from
+> another, locally or on screen — there is no "move". Smart lists are not offered for editing, and
+> a list edit never guesses at smart-list membership: `reconcileBookmarkSmartListMembership` asks
+> the server.
+
 ### Tag editing and filtering
 
 **`TagEditorDialog`** (`ui/components/tags/TagEditorDialog.kt`)
@@ -811,7 +831,7 @@ finishes inside one `scroll {}` block.
 ### Menus and bottom sheets
 
 - **`ModalBottomSheet`** + `DropdownMenuItem` → contextual bookmark action menus (see `bookmark/BookmarkActionsMenu.kt`).
-- **`ModalBottomSheet`** + MD3 `ListItem` → list pickers (see `ListPickerDialog.kt`).
+- **`ModalBottomSheet`** + MD3 `ListItem` → list pickers (see `ListMembershipDialog.kt`).
 - **`AlertDialog`** → confirmation and simple edit dialogs.
 - **`DropdownMenu`** anchored to `IconButton` → overflow menus on list items.
 - **`BaseBottomPanel`** (`ui/components/BaseBottomPanel.kt`) → custom overlay bottom panels (matches `ModalBottomSheet` background and animation style).

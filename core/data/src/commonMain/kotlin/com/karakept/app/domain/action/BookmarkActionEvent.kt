@@ -48,7 +48,7 @@ sealed class BookmarkActionEvent {
         override val requiresUndo: Boolean = false
     ) : BookmarkActionEvent()
 
-    data class MoveToList(
+    data class AddToList(
         override val bookmark: Bookmark,
         val listId: String,
         override val requiresUndo: Boolean = false

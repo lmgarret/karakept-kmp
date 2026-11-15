@@ -25,8 +25,13 @@ import com.karakept.app.data.remote.UnsupportedServerActionException
 import com.karakept.app.data.repository.requestAiRetag
 import com.karakept.app.data.repository.summarizeBookmark
 import com.karakept.app.domain.action.AiAction
+import com.karakept.app.data.repository.batchAddToList
 import com.karakept.app.data.repository.batchMarkRead
 import com.karakept.app.data.repository.batchMarkUnread
+import com.karakept.app.data.repository.batchRemoveFromList
+import com.karakept.app.domain.ListMembershipChange
+import com.karakept.app.domain.ListMembershipOperation
+import com.karakept.app.domain.ListMembershipUtils
 import com.karakept.app.data.repository.flushPendingActions
 import com.karakept.app.utils.AppLogger
 import kotlinx.coroutines.flow.first
@@ -107,47 +112,63 @@ internal fun MainScreenModel.reconcileBookmarkLists(bookmark: Bookmark) {
     }
 }
 
-fun MainScreenModel.moveBookmarkToList(bookmark: Bookmark, listId: String) {
+fun MainScreenModel.addBookmarkToList(bookmark: Bookmark, listId: String) {
     _actedOnBookmarkIds.value += bookmark.remoteId
-    val smartListIds = listRepository.lists.value
-        .filter { it.type == KarakeepList.Type.SMART }
-        .mapNotNull { it.id }
-        .toSet()
     viewModelScope.launch {
-        bookmarkActionsRepository.moveToList(
-            bookmark.remoteId, bookmark.serverId, listId, smartListIds
-        )
+        bookmarkActionsRepository.addToList(bookmark.remoteId, bookmark.serverId, listId)
         reconcileBookmarkLists(bookmark)
     }
 }
 
 /**
- * Re-adds a bookmark to a list and reloads the UI from the database.
- * Used by undo lambdas where the bookmark was removed from the visible list.
+ * Applies a list-membership edit to [bookmarks] and offers to undo it.
  *
- * Skips [reconcileBookmarkLists] intentionally — calling it would launch a
- * separate coroutine with API calls + [resetPaginationAndLoad], which races
- * with the original [removeBookmarkFromList]'s reconciliation coroutine.
- * Smart list reconciliation will happen on the next sync.
+ * Nothing is taken out of a list the edit does not name: a bookmark can be in several lists, so
+ * joining one says nothing about the list on screen. Only the server knows what the edit does to a
+ * smart list, and [reconcileBookmarkLists] asks it, after the edit and again after an undo — for
+ * the first bookmark only when there are several, since that is one request per bookmark; the
+ * rest follow on the next sync.
  */
-fun MainScreenModel.restoreAndMoveBookmarkToList(bookmark: Bookmark, listId: String) {
+fun MainScreenModel.updateBookmarkLists(bookmarks: List<Bookmark>, change: ListMembershipChange) {
+    val operations = ListMembershipUtils.operationsFor(bookmarks, change)
+    if (operations.isEmpty()) return
+    _actedOnBookmarkIds.value += operations.flatMap { op -> op.bookmarks.map { it.remoteId } }
+    val reconciled = operations.first().bookmarks.first()
     viewModelScope.launch {
-        bookmarkActionsRepository.moveToList(bookmark.remoteId, bookmark.serverId, listId)
+        operations.forEach { applyListMembershipOperation(it) }
+        reconcileBookmarkLists(reconciled)
+        val names = listRepository.lists.value.associate { it.id to it.name }
+        snackbarManager.showSnackbarWithUndo(
+            ListMembershipUtils.describeChange(change, bookmarks.size, names::get),
+            onUndo = {
+                operations.forEach { applyListMembershipOperation(it.inverted()) }
+                reconcileBookmarkLists(reconciled)
+            }
+        )
+    }
+}
+
+private suspend fun MainScreenModel.applyListMembershipOperation(operation: ListMembershipOperation) {
+    if (operation.add) {
+        bookmarkActionsRepository.batchAddToList(operation.bookmarks, operation.listId)
+    } else {
+        bookmarkActionsRepository.batchRemoveFromList(operation.bookmarks, operation.listId)
     }
 }
 
 /**
- * Removes a bookmark from a list and restores it in the visible accumulated list.
- * Used by undo lambdas when the bookmark may have been removed from the
- * accumulated list by smart list reconciliation (e.g. smart list that
- * excludes the target list — after adding to Read Later, the server
- * recalculates the smart list and strips its ID from the bookmark's local
- * listIds; undoing the add removes Read Later but the smart list ID is
- * still gone, so [resetPaginationAndLoad] won't find it).
- *
- * Optimistically re-inserts the bookmark at the top of the accumulated
- * list if it's missing, so the user sees it immediately. Smart list
- * membership will be fully reconciled on the next sync.
+ * Undo for a swipe that took a bookmark out of a list. Skips [reconcileBookmarkLists], which the
+ * original [removeBookmarkFromList] is still running: smart lists catch up on the next sync.
+ */
+fun MainScreenModel.restoreAndAddBookmarkToList(bookmark: Bookmark, listId: String) {
+    viewModelScope.launch {
+        bookmarkActionsRepository.addToList(bookmark.remoteId, bookmark.serverId, listId)
+    }
+}
+
+/**
+ * Undo for a swipe that added a bookmark to a list. Skips [reconcileBookmarkLists] for the same
+ * reason as [restoreAndAddBookmarkToList].
  */
 fun MainScreenModel.restoreAndRemoveBookmarkFromList(bookmark: Bookmark, listId: String) {
     viewModelScope.launch {
@@ -237,7 +258,7 @@ fun MainScreenModel.executeScrollAction(
                 config?.tagName?.let { addBookmarkTag(bookmark, it) }
             }
             com.karakept.app.data.model.SwipeAction.ADD_TO_LIST -> {
-                config?.listId?.let { moveBookmarkToList(bookmark, it) }
+                config?.listId?.let { addBookmarkToList(bookmark, it) }
             }
             else -> {}
         }

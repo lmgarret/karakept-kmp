@@ -52,12 +52,12 @@ class BookmarkScrollPositionAfterReconcileTest {
     }
 
     @Test
-    fun movingABookmarkToAListMarksItActedOn() = runTest(testDispatcher) {
+    fun addingABookmarkToAListMarksItActedOn() = runTest(testDispatcher) {
         val model = harness.createModel()
         advanceUntilIdle()
         val target = bookmark(1L, listIds = "feeds")
 
-        model.moveBookmarkToList(target, "read-later")
+        model.addBookmarkToList(target, "read-later")
 
         // Marked synchronously: the reconcile involves network calls, so the window in which the
         // scroll-triggered action could fire on a row about to leave is seconds long.
@@ -82,7 +82,7 @@ class BookmarkScrollPositionAfterReconcileTest {
     fun switchingViewClearsTheActedOnMarks() = runTest(testDispatcher) {
         val model = harness.createModel()
         advanceUntilIdle()
-        model.moveBookmarkToList(bookmark(1L, listIds = "feeds"), "read-later")
+        model.addBookmarkToList(bookmark(1L, listIds = "feeds"), "read-later")
         assertTrue(model.actedOnBookmarkIds.value.isNotEmpty())
 
         model.applyFilter(FilterConfig(status = FilterStatus.ARCHIVED))
@@ -106,7 +106,7 @@ class BookmarkScrollPositionAfterReconcileTest {
         advanceUntilIdle()
         harness.clearReads()
 
-        model.moveBookmarkToList(bookmark(1L, listIds = "feeds"), "read-later")
+        model.addBookmarkToList(bookmark(1L, listIds = "feeds"), "read-later")
         advanceUntilIdle()
 
         assertTrue(

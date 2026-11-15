@@ -54,15 +54,15 @@ class List02RegressionTest {
     }
 
     @Test
-    fun `moveBookmarkToList calls moveToList on actions repository`() = runTest(testDispatcher) {
+    fun `addBookmarkToList calls addToList on actions repository`() = runTest(testDispatcher) {
         val bookmark = testBookmark(1L)
         val model = harness.createModel()
         advanceUntilIdle()
 
-        model.moveBookmarkToList(bookmark, "manual-1")
+        model.addBookmarkToList(bookmark, "manual-1")
         advanceUntilIdle()
 
-        coVerify { harness.bookmarkActionsRepository.moveToList(bookmark.remoteId, bookmark.serverId, "manual-1", any()) }
+        coVerify { harness.bookmarkActionsRepository.addToList(bookmark.remoteId, bookmark.serverId, "manual-1") }
     }
 
     @Test
@@ -78,21 +78,21 @@ class List02RegressionTest {
     }
 
     @Test
-    fun `moveBookmarkToList works when no SMART lists exist`() = runTest(testDispatcher) {
+    fun `addBookmarkToList works when no SMART lists exist`() = runTest(testDispatcher) {
         every { harness.listRepository.lists } returns MutableStateFlow(listOf(manualList))
 
         val bookmark = testBookmark(3L)
         val model = harness.createModel()
         advanceUntilIdle()
 
-        model.moveBookmarkToList(bookmark, "manual-1")
+        model.addBookmarkToList(bookmark, "manual-1")
         advanceUntilIdle()
 
-        coVerify { harness.bookmarkActionsRepository.moveToList(bookmark.remoteId, bookmark.serverId, "manual-1", any()) }
+        coVerify { harness.bookmarkActionsRepository.addToList(bookmark.remoteId, bookmark.serverId, "manual-1") }
     }
 
     @Test
-    fun `executeScrollAction with ADD_TO_LIST delegates to moveBookmarkToList`() = runTest(testDispatcher) {
+    fun `executeScrollAction with ADD_TO_LIST delegates to addBookmarkToList`() = runTest(testDispatcher) {
         val bookmark = testBookmark(4L)
         val config = com.karakept.app.data.model.CustomSwipeActionConfig(
             id = "cfg-1",
@@ -105,6 +105,6 @@ class List02RegressionTest {
         model.executeScrollAction(bookmark, SwipeAction.ADD_TO_LIST, config)
         advanceUntilIdle()
 
-        coVerify { harness.bookmarkActionsRepository.moveToList(bookmark.remoteId, bookmark.serverId, "manual-1", any()) }
+        coVerify { harness.bookmarkActionsRepository.addToList(bookmark.remoteId, bookmark.serverId, "manual-1") }
     }
 }

@@ -314,31 +314,26 @@ class BookmarkActionsRepository internal constructor(
     }
 
     /**
-     * Move bookmark to a list.
+     * Add bookmark to a list, keeping every list it is already in.
      */
-    suspend fun moveToList(
+    suspend fun addToList(
         bookmarkRemoteId: String,
         serverId: String,
-        listId: String,
-        smartListIds: Set<String> = emptySet()
+        listId: String
     ) {
         withContext(appDispatchers.io) {
-            // Update local DB immediately (optimistic update).
-            // Also strip smart-list membership: the server recomputes it from the bookmark's
-            // manual lists, so a smart list that excludes the target list (e.g. All Feeds
-            // excludes Read Later) must lose this bookmark right away — otherwise it flashes
-            // back into that smart list when the user navigates to it before the sync lands.
-            // Smart lists it still belongs to are re-added by the next ForList sync.
+            // Update local DB immediately (optimistic update). Only the target list is touched:
+            // a bookmark can be in any number of lists, and what the addition does to its smart
+            // lists is the server's to say (see reconcileBookmarkSmartListMembership).
             val bookmark = bookmarkDao.getBookmarkByRemoteId(bookmarkRemoteId, serverId)
             bookmark?.let {
                 val currentListIds = it.listIds.split(",").map { id -> id.trim() }.filter { id -> id.isNotBlank() }
-                val newListIds = (currentListIds - smartListIds) + listId
-                if (newListIds.toSet() != currentListIds.toSet()) {
-                    bookmarkDao.insertBookmark(it.copy(listIds = newListIds.distinct().joinToString(",")))
+                if (listId !in currentListIds) {
+                    bookmarkDao.insertBookmark(it.copy(listIds = (currentListIds + listId).joinToString(",")))
                 }
             }
 
-            // Last state wins per (bookmark, list): a move/remove toggle storm collapses
+            // Last state wins per (bookmark, list): an add/remove toggle storm collapses
             // to the single action matching the final local state
             dedupListMembershipActions(bookmarkRemoteId, serverId, listId)
             queueAction(
@@ -514,7 +509,7 @@ class BookmarkActionsRepository internal constructor(
     }
 
     /**
-     * Removes queued move/remove actions targeting the same list for a bookmark,
+     * Removes queued add/remove actions targeting the same list for a bookmark,
      * so only the latest membership intent for that (bookmark, list) pair survives.
      */
     internal suspend fun dedupListMembershipActions(

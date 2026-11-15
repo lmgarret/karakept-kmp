@@ -17,6 +17,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -31,7 +32,8 @@ import com.karakept.app.domain.action.ActionSnackbarManager
 import com.karakept.app.domain.action.AiAction
 import com.karakept.app.domain.action.undoableAction
 import com.karakept.app.ui.components.FilterBottomPanel
-import com.karakept.app.ui.components.ListPickerDialog
+import com.karakept.app.domain.ListMembershipChange
+import com.karakept.app.ui.components.ListMembershipDialog
 import com.karakept.app.ui.components.bookmark.AddBookmarkDialog
 import com.karakept.app.ui.components.bookmark.BookmarkAction
 import com.karakept.app.ui.components.bookmark.BookmarkActionsMenu
@@ -167,13 +169,7 @@ fun MainScreenBookmarkActionsMenu(
                     is BookmarkAction.ToggleArchive -> screenModel.toggleBookmarkArchive(bm)
                     is BookmarkAction.ToggleFavorite -> screenModel.toggleBookmarkFavorite(bm)
                     is BookmarkAction.ToggleRead -> screenModel.toggleBookmarkRead(bm)
-                    is BookmarkAction.MoveToList -> {
-                        screenModel.moveBookmarkToList(bm, action.listId)
-                        val listName = lists.firstOrNull { it.id == action.listId }?.name ?: "list"
-                        scope.undoableAction(snackbarManager, "Moved to '$listName'") {
-                            screenModel.restoreAndRemoveBookmarkFromList(bm, action.listId)
-                        }
-                    }
+                    is BookmarkAction.UpdateLists -> screenModel.updateBookmarkLists(listOf(bm), action.change)
                     is BookmarkAction.UpdateTags -> {
                         val oldTags = bm.tags.split(",").filter { it.isNotBlank() }
                         screenModel.updateBookmarkTags(bm, action.tags)
@@ -284,18 +280,23 @@ fun BatchAiConfirmDialog(
 }
 
 /**
- * Batch move-to-list picker dialog.
+ * Batch list-membership dialog. The memberships come from [loadSelectionListIds] rather than the
+ * rows on screen: a selection can hold rows that are not loaded, and a list shown as holding all
+ * of it when it holds only some could then never be added to the rest.
  */
 @Composable
-fun BatchListPickerDialog(
+fun BatchListMembershipDialog(
     lists: List<KarakeepList>,
-    onListSelected: (String) -> Unit,
+    loadSelectionListIds: suspend () -> List<Set<String>>,
+    onApply: (ListMembershipChange) -> Unit,
     onDismiss: () -> Unit
 ) {
-    ListPickerDialog(
+    val bookmarksListIds by produceState<List<Set<String>>?>(null) { value = loadSelectionListIds() }
+    ListMembershipDialog(
         lists = lists,
-        currentListIds = emptyList(),
-        onListSelected = onListSelected,
+        bookmarksListIds = bookmarksListIds.orEmpty(),
+        isLoading = bookmarksListIds == null,
+        onApply = onApply,
         onDismiss = onDismiss
     )
 }

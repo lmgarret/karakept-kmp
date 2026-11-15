@@ -248,18 +248,18 @@ class BatchOperationsTest : BaseRepositoryTest() {
     }
 
     // ──────────────────────────────────────────────────────────
-    // batchMoveToList
+    // batchAddToList
     // ──────────────────────────────────────────────────────────
 
     @Test
-    fun batchMoveToList_addsListIdToEachBookmark() = runTest(testDispatcher) {
+    fun batchAddToList_addsListIdToEachBookmark() = runTest(testDispatcher) {
         val b1 = makeBookmark(remoteId = "remote-1", listIds = "")
         val b2 = makeBookmark(remoteId = "remote-2", listIds = "list-existing")
         coEvery { bookmarkDao.getBookmarkByRemoteId("remote-1", "server1") } returns b1
         coEvery { bookmarkDao.getBookmarkByRemoteId("remote-2", "server1") } returns b2
         coEvery { settingsRepository.offlineMode } returns flowOf(true)
 
-        repository.batchMoveToList(listOf(b1, b2).toBookmarks(), "list-99")
+        repository.batchAddToList(listOf(b1, b2).toBookmarks(), "list-99")
 
         val slots = mutableListOf<BookmarkEntity>()
         coVerify(exactly = 2) { bookmarkDao.insertBookmark(capture(slots)) }
@@ -269,14 +269,14 @@ class BatchOperationsTest : BaseRepositoryTest() {
     }
 
     @Test
-    fun batchMoveToList_queuesPendingActionForEachBookmark() = runTest(testDispatcher) {
+    fun batchAddToList_queuesPendingActionForEachBookmark() = runTest(testDispatcher) {
         val b1 = makeBookmark(remoteId = "remote-1", listIds = "")
         val b2 = makeBookmark(remoteId = "remote-2", listIds = "")
         coEvery { bookmarkDao.getBookmarkByRemoteId("remote-1", "server1") } returns b1
         coEvery { bookmarkDao.getBookmarkByRemoteId("remote-2", "server1") } returns b2
         coEvery { settingsRepository.offlineMode } returns flowOf(true)
 
-        repository.batchMoveToList(listOf(b1, b2).toBookmarks(), "list-99")
+        repository.batchAddToList(listOf(b1, b2).toBookmarks(), "list-99")
 
         val slots = mutableListOf<PendingActionEntity>()
         coVerify(exactly = 2) { pendingActionDao.insertAction(capture(slots)) }
@@ -285,20 +285,94 @@ class BatchOperationsTest : BaseRepositoryTest() {
     }
 
     @Test
-    fun batchMoveToList_doesNotDuplicateExistingListId() = runTest(testDispatcher) {
+    fun batchAddToList_doesNotDuplicateExistingListId() = runTest(testDispatcher) {
         val b1 = makeBookmark(remoteId = "remote-1", listIds = "list-99")
         coEvery { bookmarkDao.getBookmarkByRemoteId("remote-1", "server1") } returns b1
         coEvery { settingsRepository.offlineMode } returns flowOf(true)
 
-        repository.batchMoveToList(listOf(b1).toBookmarks(), "list-99")
+        repository.batchAddToList(listOf(b1).toBookmarks(), "list-99")
 
         // insertBookmark should NOT be called since the listId already exists
         coVerify(exactly = 0) { bookmarkDao.insertBookmark(any()) }
     }
 
     // ──────────────────────────────────────────────────────────
+    // batchRemoveFromList
+    // ──────────────────────────────────────────────────────────
+
+    @Test
+    fun batchRemoveFromList_removesOnlyThatListFromEachBookmark() = runTest(testDispatcher) {
+        val b1 = makeBookmark(remoteId = "remote-1", listIds = "list-99")
+        val b2 = makeBookmark(remoteId = "remote-2", listIds = "list-kept,list-99")
+        coEvery { bookmarkDao.getBookmarkByRemoteId("remote-1", "server1") } returns b1
+        coEvery { bookmarkDao.getBookmarkByRemoteId("remote-2", "server1") } returns b2
+        coEvery { settingsRepository.offlineMode } returns flowOf(true)
+
+        repository.batchRemoveFromList(listOf(b1, b2).toBookmarks(), "list-99")
+
+        val slots = mutableListOf<BookmarkEntity>()
+        coVerify(exactly = 2) { bookmarkDao.insertBookmark(capture(slots)) }
+        assertEquals(listOf("", "list-kept"), slots.map { it.listIds })
+    }
+
+    @Test
+    fun batchRemoveFromList_queuesPendingActionForEachBookmark() = runTest(testDispatcher) {
+        val b1 = makeBookmark(remoteId = "remote-1", listIds = "list-99")
+        val b2 = makeBookmark(remoteId = "remote-2", listIds = "list-99")
+        coEvery { bookmarkDao.getBookmarkByRemoteId("remote-1", "server1") } returns b1
+        coEvery { bookmarkDao.getBookmarkByRemoteId("remote-2", "server1") } returns b2
+        coEvery { settingsRepository.offlineMode } returns flowOf(true)
+
+        repository.batchRemoveFromList(listOf(b1, b2).toBookmarks(), "list-99")
+
+        val slots = mutableListOf<PendingActionEntity>()
+        coVerify(exactly = 2) { pendingActionDao.insertAction(capture(slots)) }
+        assertTrue(slots.all { it.actionType == PendingActionType.REMOVE_FROM_LIST })
+        assertTrue(slots.all { it.actionData.contains("list-99") })
+    }
+
+    @Test
+    fun batchAddToList_cancelsAQueuedRemovalFromTheSameListOnly() = runTest(testDispatcher) {
+        val b1 = makeBookmark(remoteId = "remote-1", listIds = "")
+        coEvery { bookmarkDao.getBookmarkByRemoteId("remote-1", "server1") } returns b1
+        coEvery { settingsRepository.offlineMode } returns flowOf(true)
+        coEvery { pendingActionDao.getPendingActionsList("server1") } returns listOf(
+            membershipAction(id = 1L, PendingActionType.REMOVE_FROM_LIST, listId = "list-99"),
+            membershipAction(id = 2L, PendingActionType.REMOVE_FROM_LIST, listId = "list-other")
+        )
+
+        repository.batchAddToList(listOf(b1).toBookmarks(), "list-99")
+
+        coVerify(exactly = 1) { pendingActionDao.deleteAction(match { it.id == 1L }) }
+        coVerify(exactly = 0) { pendingActionDao.deleteAction(match { it.id == 2L }) }
+    }
+
+    @Test
+    fun batchRemoveFromList_cancelsAQueuedAdditionToTheSameList() = runTest(testDispatcher) {
+        val b1 = makeBookmark(remoteId = "remote-1", listIds = "list-99")
+        coEvery { bookmarkDao.getBookmarkByRemoteId("remote-1", "server1") } returns b1
+        coEvery { settingsRepository.offlineMode } returns flowOf(true)
+        coEvery { pendingActionDao.getPendingActionsList("server1") } returns listOf(
+            membershipAction(id = 1L, PendingActionType.MOVE_TO_LIST, listId = "list-99")
+        )
+
+        repository.batchRemoveFromList(listOf(b1).toBookmarks(), "list-99")
+
+        coVerify(exactly = 1) { pendingActionDao.deleteAction(match { it.id == 1L }) }
+    }
+
+    // ──────────────────────────────────────────────────────────
     // Helpers
     // ──────────────────────────────────────────────────────────
+
+    private fun membershipAction(id: Long, type: String, listId: String) = PendingActionEntity(
+        id = id,
+        bookmarkRemoteId = "remote-1",
+        serverId = "server1",
+        actionType = type,
+        actionData = """{"listId":"$listId"}""",
+        createdAt = id
+    )
 
     private fun makeBookmark(
         localId: Long = 1L,

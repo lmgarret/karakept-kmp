@@ -166,15 +166,15 @@ class BookmarkActionControllerTest : BaseRepositoryTest() {
     }
 
     @Test
-    fun moveToListAction_callsRepositoryMoveToList() = runTest(testDispatcher) {
+    fun addToListAction_callsRepositoryAddToList() = runTest(testDispatcher) {
         val bookmark = testBookmarkEntity()
 
-        val result = controller.executeAction(BookmarkActionEvent.MoveToList(bookmark.toBookmark(), "list-1"))
+        val result = controller.executeAction(BookmarkActionEvent.AddToList(bookmark.toBookmark(), "list-1"))
 
         assertIs<BookmarkActionResult.Success>(result)
-        assertEquals("Moved to list", result.message)
+        assertEquals("Added to list", result.message)
         coVerify {
-            bookmarkActionsRepository.moveToList(bookmark.remoteId, bookmark.serverId, "list-1", any())
+            bookmarkActionsRepository.addToList(bookmark.remoteId, bookmark.serverId, "list-1")
         }
     }
 

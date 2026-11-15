@@ -104,9 +104,9 @@ class PendingActionDedupTest {
     }
 
     @Test
-    fun moveThenRemoveSameList_cancelsMatchingMembershipRow() = runTest(testDispatcher) {
+    fun addThenRemoveSameList_cancelsMatchingMembershipRow() = runTest(testDispatcher) {
         stubBookmark("orig-4")
-        // After the move enqueues, the queue contains a MOVE_TO_LIST for list-1.
+        // After the add enqueues, the queue contains a MOVE_TO_LIST for list-1.
         coEvery { pendingActionDao.getPendingActionsList(testServer.id) } returns listOf(
             PendingActionEntity(
                 id = 10L,
@@ -120,7 +120,7 @@ class PendingActionDedupTest {
 
         repository.removeFromList("orig-4", testServer.id, "list-1")
 
-        // The matching move row for list-1 is cancelled out before the remove is queued
+        // The matching add row for list-1 is cancelled out before the remove is queued
         coVerify {
             pendingActionDao.deleteAction(match {
                 it.actionType == PendingActionType.MOVE_TO_LIST && it.bookmarkRemoteId == "orig-4"

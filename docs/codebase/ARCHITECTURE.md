@@ -139,7 +139,7 @@ the DB. Instead `BookmarkSyncPipeline` commits each page as it arrives:
 
 **BookmarkActionEvent (Sealed Class):**
 - Purpose: Type-safe representation of all possible bookmark mutations
-- Examples: Archive, Unarchive, MarkRead, MarkUnread, ToggleFavorite, Delete, UpdateTags, MoveToList, RemoveFromList
+- Examples: Archive, Unarchive, MarkRead, MarkUnread, ToggleFavorite, Delete, UpdateTags, AddToList, RemoveFromList
 - Location: `core/data/src/commonMain/kotlin/com/karakept/app/domain/action/BookmarkActionEvent.kt`
 - Pattern: Sealed class hierarchy with discriminator field `requiresUndo` to determine if undo support applies
 
@@ -246,7 +246,7 @@ current view, rebuilt on every write, to answer these.
   - Render full bookmark details with hero image, HTML content, highlights
   - Display and manage highlights (create, delete, sync)
   - Show reader mode (with font/theme/size customization)
-  - Handle tag editing and bookmark actions (favorite, archive, move to list)
+  - Handle tag editing and bookmark actions (favorite, archive, edit lists)
 
 ## Error Handling
 

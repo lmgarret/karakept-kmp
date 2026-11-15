@@ -25,7 +25,7 @@ fun ViewerContentPanels(
     htmlBackgroundColor: Color?,
     htmlFontSize: Int,
     htmlFontFamily: ReaderFontFamily,
-    lists: List<com.karakept.api.model.KarakeepList>,
+    lists: List<com.karakept.api.model.KarakeepList>?,
     showModeDialog: Boolean,
     onShowModeDialogChanged: (Boolean) -> Unit,
     selectedSource: ContentSource = ContentSource.EXTRACTED,
@@ -112,13 +112,16 @@ fun ViewerContentPanels(
     }
 
     // List Picker Dialog
-    if (showListPicker && loadingState is BookmarkLoadingState.FullyLoaded && lists.isNotEmpty()) {
+    if (showListPicker && loadingState is BookmarkLoadingState.FullyLoaded) {
         val fullyLoadedState = loadingState
-        com.karakept.app.ui.components.ListPickerDialog(
-            lists = lists,
-            currentListIds = fullyLoadedState.bookmark.listIds.split(",").filter { it.isNotBlank() },
-            onListSelected = { listId ->
-                screenModel.moveBookmarkToList(fullyLoadedState.bookmark, listId)
+        com.karakept.app.ui.components.ListMembershipDialog(
+            lists = lists.orEmpty(),
+            isLoading = lists == null,
+            bookmarksListIds = listOf(
+                com.karakept.app.domain.ListMembershipUtils.parseListIds(fullyLoadedState.bookmark.listIds)
+            ),
+            onApply = { change ->
+                screenModel.updateBookmarkLists(fullyLoadedState.bookmark, change)
                 onShowListPickerChanged(false)
             },
             onDismiss = { onShowListPickerChanged(false) }

@@ -18,7 +18,8 @@ import com.karakept.app.data.repository.batchMarkUnread
 import com.karakept.app.data.repository.batchSetFavourite
 import com.karakept.app.data.repository.batchDelete
 import com.karakept.app.data.repository.batchUpdateTags
-import com.karakept.app.data.repository.batchMoveToList
+import com.karakept.app.domain.ListMembershipChange
+import com.karakept.app.domain.ListMembershipUtils
 
 /**
  * Track the last clicked bookmark's **slot** (call on every normal click).
@@ -206,14 +207,17 @@ fun MainScreenModel.batchSetTags(newTags: List<String>) = batchAction(
     act = { bookmarkActionsRepository.batchUpdateTags(it, newTags) }
 )
 
-fun MainScreenModel.batchMoveToList(listId: String) = batchAction(
-    message = { "Moved $it bookmark${plural(it)} to list" },
-    undo = { moved -> moved.forEach { restoreAndRemoveBookmarkFromList(it, listId) } },
-    act = { moved ->
-        bookmarkActionsRepository.batchMoveToList(moved, listId)
-        moved.firstOrNull()?.let { reconcileBookmarkLists(it) }
+/** The list ids of every selected bookmark, loaded or not. */
+internal suspend fun MainScreenModel.selectedBookmarksListIds(): List<Set<String>> =
+    getSelectedBookmarks().map { ListMembershipUtils.parseListIds(it.listIds) }
+
+fun MainScreenModel.batchUpdateLists(change: ListMembershipChange) {
+    viewModelScope.launch {
+        val bookmarks = getSelectedBookmarks()
+        clearSelection()
+        updateBookmarkLists(bookmarks, change)
     }
-)
+}
 
 /** How far a batch AI run has got. Drives the selection bar's title while one is in flight. */
 data class AiBatchProgress(

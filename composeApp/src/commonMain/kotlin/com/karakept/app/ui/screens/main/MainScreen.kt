@@ -308,10 +308,10 @@ object MainScreen : NavKey {
                         if (bookmarkListIds.contains(listId)) {
                             screenModel.removeBookmarkFromList(bookmark, listId)
                             scope.undoableAction(snackbarManager, "Removed from '$listName'") {
-                                screenModel.restoreAndMoveBookmarkToList(bookmark, listId)
+                                screenModel.restoreAndAddBookmarkToList(bookmark, listId)
                             }
                         } else {
-                            screenModel.moveBookmarkToList(bookmark, listId)
+                            screenModel.addBookmarkToList(bookmark, listId)
                             scope.undoableAction(snackbarManager, "Added to '$listName'") {
                                 screenModel.restoreAndRemoveBookmarkFromList(bookmark, listId)
                             }
@@ -526,9 +526,10 @@ object MainScreen : NavKey {
             )
         }
         if (showBatchListPicker) {
-            BatchListPickerDialog(
+            BatchListMembershipDialog(
                 lists = lists,
-                onListSelected = { listId -> screenModel.batchMoveToList(listId); showBatchListPicker = false },
+                loadSelectionListIds = { screenModel.selectedBookmarksListIds() },
+                onApply = { change -> screenModel.batchUpdateLists(change); showBatchListPicker = false },
                 onDismiss = { showBatchListPicker = false }
             )
         }

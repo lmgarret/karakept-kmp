@@ -72,7 +72,7 @@ internal fun MainScreenTopBar(
     onBatchFavourite: () -> Unit = {},
     onBatchUnfavourite: () -> Unit = {},
     onBatchSetTags: () -> Unit = {},
-    onBatchMoveToList: () -> Unit = {},
+    onBatchEditLists: () -> Unit = {},
     onBatchDelete: () -> Unit = {},
     // AI batch actions. Withheld for Select All selections and for servers that would refuse them.
     aiCapabilities: AiCapabilities = AiCapabilities(),
@@ -167,9 +167,9 @@ internal fun MainScreenTopBar(
                             HorizontalDivider()
                             // Organisation
                             DropdownMenuItem(
-                                text = { Text("Move to List") },
+                                text = { Text("Edit Lists") },
                                 leadingIcon = { Icon(AppIcons.Default.FolderOpen, null) },
-                                onClick = { onBatchMoveToList(); showBatchMenu = false }
+                                onClick = { onBatchEditLists(); showBatchMenu = false }
                             )
                             DropdownMenuItem(
                                 text = { Text("Set Tags") },

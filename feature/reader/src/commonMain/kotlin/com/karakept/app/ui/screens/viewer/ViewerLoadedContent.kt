@@ -401,7 +401,7 @@ internal fun ViewerLoadedContent(
             onBackClick = onBack, onMenuToggle = { ui.showMenu = it },
             onAppearanceClick = { ui.showAppearancePanel = true },
             onViewerModeClick = { ui.showModeDialog = true },
-            onMoveToListClick = { ui.showListPicker = true },
+            onEditListsClick = { ui.showListPicker = true },
             onEditTagsClick = { ui.showTagEditor = true },
             onRefreshClick = { screenModel.refreshBookmark() },
             onDeleteClick = { ui.showDeleteConfirmation = true },

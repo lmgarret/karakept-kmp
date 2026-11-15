@@ -287,14 +287,14 @@ class BookmarkSyncIntegrationTest : BaseDockerIntegrationTest() {
     }
 
     @Test
-    fun testMoveToListAction_addsBookmarkToListOnServer() = runTest(testDispatcher) {
+    fun testAddToListAction_addsBookmarkToListOnServer() = runTest(testDispatcher) {
         assertTrue(isDockerRunning, "Docker should be running")
 
         val listId = seedListViaTrpc(baseUrl, apiKey, "Action Test List ${System.currentTimeMillis()}")
         val remoteId = seedBookmarkViaTrpc(baseUrl, apiKey, "https://list-action.example.com/${System.currentTimeMillis()}")
         val bookmark = insertLocalBookmark(remoteId)
 
-        bookmarkActionsRepository.moveToList(bookmark.remoteId, testServer.id, listId)
+        bookmarkActionsRepository.addToList(bookmark.remoteId, testServer.id, listId)
         bookmarkActionsRepository.processPendingActions(testServer)
         withContext(Dispatchers.Default) { kotlinx.coroutines.delay(1000) }
 

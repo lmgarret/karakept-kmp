@@ -183,7 +183,7 @@ class SmartListDeferredRefreshTest {
     }
 
     @Test
-    fun moveToList_marksSmartListsWhenStale() = runTest(testDispatcher) {
+    fun addToList_marksSmartListsWhenStale() = runTest(testDispatcher) {
         createModel()
         advanceUntilIdle()
 
@@ -194,7 +194,7 @@ class SmartListDeferredRefreshTest {
 
         val bookmark = bookmarkEntity(localId = 3L, listIds = "")
 
-        model.moveBookmarkToList(bookmark, "manualC")
+        model.addBookmarkToList(bookmark, "manualC")
         advanceUntilIdle()
 
         assertTrue("smartA" in model._smartListsNeedingRefresh.value)

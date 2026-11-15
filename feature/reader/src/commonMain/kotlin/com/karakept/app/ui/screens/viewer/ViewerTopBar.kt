@@ -61,7 +61,7 @@ internal fun ViewerTopBar(
     onMenuToggle: (Boolean) -> Unit,
     onAppearanceClick: () -> Unit,
     onViewerModeClick: () -> Unit = {},
-    onMoveToListClick: () -> Unit,
+    onEditListsClick: () -> Unit,
     onEditTagsClick: () -> Unit,
     onRefreshClick: () -> Unit,
     onDeleteClick: () -> Unit,
@@ -303,9 +303,9 @@ internal fun ViewerTopBar(
                 // Divider to separate sections
                 HorizontalDivider()
 
-                // Move to List
+                // Edit Lists
                 DropdownMenuItem(
-                    text = { Text("Move to List") },
+                    text = { Text("Edit Lists") },
                     leadingIcon = {
                         Icon(
                             imageVector = AppIcons.Default.FolderOpen,
@@ -313,7 +313,7 @@ internal fun ViewerTopBar(
                         )
                     },
                     onClick = {
-                        onMoveToListClick()
+                        onEditListsClick()
                         onMenuToggle(false)
                     }
                 )
