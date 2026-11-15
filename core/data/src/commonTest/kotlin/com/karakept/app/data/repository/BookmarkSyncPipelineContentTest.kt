@@ -60,21 +60,21 @@ internal class BookmarkSyncPipelineContentTest : BookmarkSyncPipelineTestBase() 
     @Test
     fun contentSync_doesNotRedownloadContentPastItsRetention() = runTest(testDispatcher) {
         // Cleanup dropped these bodies on purpose. Sync must not bring them straight back —
-        // except for the one archived too recently to have been dropped.
+        // except for the one read too recently to have been dropped.
         coEvery { settingsRepository.contentSyncStrategy } returns flowOf(SyncStrategy.ALL)
         coEvery { settingsRepository.activeOfflineRetentionDays } returns flowOf(7)
         val now = System.currentTimeMillis()
         val retired = testBookmarkEntity(localId = 1L, remoteId = "bk-old")
-            .copy(isArchived = true, readOrArchivedAt = now - 30 * OfflineRetention.DAY_MILLIS)
+            .copy(isRead = true, readOrArchivedAt = now - 30 * OfflineRetention.DAY_MILLIS)
         val recent = testBookmarkEntity(localId = 2L, remoteId = "bk-new")
-            .copy(isArchived = true, readOrArchivedAt = now - OfflineRetention.DAY_MILLIS)
+            .copy(isRead = true, readOrArchivedAt = now - OfflineRetention.DAY_MILLIS)
         coEvery { bookmarkDao.getBookmarksForServerWithContentInfo("server1") } returns listOf(retired, recent)
         coEvery {
             remoteDataSource.fetchBookmarks(any(), any(), any(), any(), any(), any())
         } returns PaginatedBookmarks(
             bookmarks = listOf(
-                makeBookmarkDto(id = "bk-old", archived = true),
-                makeBookmarkDto(id = "bk-new", archived = true)
+                makeBookmarkDto(id = "bk-old"),
+                makeBookmarkDto(id = "bk-new")
             ),
             nextCursor = null
         )
@@ -102,8 +102,9 @@ internal class BookmarkSyncPipelineContentTest : BookmarkSyncPipelineTestBase() 
     }
 
     @Test
-    fun contentSync_downloadsAgainOnceARetiredBookmarkIsUnarchived() = runTest(testDispatcher) {
-        // The stamp is only cleared by the next cleanup; the flags the server just sent win.
+    fun contentSync_downloadsAnArchivedBookmarkThatWasNeverRead() = runTest(testDispatcher) {
+        // Retention is about read bookmarks. Archiving alone never retires a copy, even with a
+        // stamp left over from when it did.
         coEvery { settingsRepository.contentSyncStrategy } returns flowOf(SyncStrategy.ALL)
         coEvery { settingsRepository.activeOfflineRetentionDays } returns flowOf(7)
         val stale = testBookmarkEntity(localId = 1L, remoteId = "bk-1")
@@ -111,7 +112,7 @@ internal class BookmarkSyncPipelineContentTest : BookmarkSyncPipelineTestBase() 
         coEvery { bookmarkDao.getBookmarksForServerWithContentInfo("server1") } returns listOf(stale)
         coEvery {
             remoteDataSource.fetchBookmarks(any(), any(), any(), any(), any(), any())
-        } returns PaginatedBookmarks(bookmarks = listOf(makeBookmarkDto(id = "bk-1", archived = false)), nextCursor = null)
+        } returns PaginatedBookmarks(bookmarks = listOf(makeBookmarkDto(id = "bk-1", archived = true)), nextCursor = null)
         coEvery { fetchRemoteContent(any(), any()) } returns "<p>Fetched content</p>"
         coEvery { imageCacheManager.cacheImagesInHtml(any(), any()) } answers { firstArg() }
 

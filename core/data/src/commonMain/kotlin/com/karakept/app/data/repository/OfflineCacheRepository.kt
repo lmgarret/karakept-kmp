@@ -75,7 +75,8 @@ data class OfflineCacheCleanupResult(
  *
  * Runs in five steps, each safe to interrupt:
  * 1. Stamp [com.karakept.app.data.local.entity.BookmarkEntity.readOrArchivedAt] on rows that
- *    became read or archived since the last pass, and clear it on rows that went back.
+ *    became read since the last pass, and clear it on rows that went back. Archiving does not
+ *    count: an archived bookmark keeps its copy until it is read.
  * 2. When a retention period is set, drop the body and local asset paths of bookmarks retired
  *    longer than that. The rows themselves stay.
  * 3. Drop the copies [OfflineScope] no longer covers — a list's "Sync offline" turned off, a
@@ -220,7 +221,7 @@ class OfflineCacheRepository internal constructor(
 
         val retentionDays = settingsRepository.activeOfflineRetentionDays.first()
         val retired = snapshot.holders.filter {
-            OfflineRetention.isRetired(it.isRead, it.isArchived, it.readOrArchivedAt, retentionDays, now)
+            OfflineRetention.isRetired(it.isRead, it.readOrArchivedAt, retentionDays, now)
         }
         val retiredBytes = retired.sumOf { simulation.evict(it) ?: 0L }
 

@@ -51,9 +51,10 @@ internal data class BookmarkEntity(
     // the page's meta tags — Karakeep's inference worker writes this field and never touches that one.
     val summary: String? = null,
     val summarizationStatus: String? = null, // "success" | "failure" | "pending"
-    // When this bookmark was first seen read or archived (epoch millis), null while it is
-    // neither. Stamped by OfflineCacheRepository rather than by every path that flips the two
-    // flags, so it is accurate to the cleanup cadence, not to the millisecond.
+    // When this bookmark was first seen read (epoch millis), null while it is unread. Archiving
+    // used to stamp it too, hence the name; it no longer does. Stamped by OfflineCacheRepository
+    // rather than by every path that flips the flag, so it is accurate to the cleanup cadence,
+    // not to the millisecond.
     val readOrArchivedAt: Long? = null,
     // When the reader last opened this bookmark (epoch millis); orders storage-cap evictions.
     val lastOpenedAt: Long? = null,
@@ -74,9 +75,9 @@ internal data class BookmarkEntity(
 internal const val OFFLINE_PREDICATE = "hasContent = 1"
 
 /**
- * A bookmark whose offline copy has outlived the retention window: read or archived, and first
- * seen that way at or before `:cutoff`. [com.karakept.app.domain.OfflineRetention.isRetired] is the
+ * A bookmark whose offline copy has outlived the retention window: read, and first seen that
+ * way at or before `:cutoff`. Archived alone never qualifies. [com.karakept.app.domain.OfflineRetention.isRetired] is the
  * same test in Kotlin, for rows already in memory; the two must agree.
  */
 internal const val RETIRED_PREDICATE =
-    "(isRead = 1 OR isArchived = 1) AND readOrArchivedAt IS NOT NULL AND readOrArchivedAt <= :cutoff"
+    "isRead = 1 AND readOrArchivedAt IS NOT NULL AND readOrArchivedAt <= :cutoff"

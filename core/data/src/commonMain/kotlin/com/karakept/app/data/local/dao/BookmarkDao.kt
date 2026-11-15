@@ -234,13 +234,13 @@ internal interface BookmarkDao {
 
     @Query(
         "UPDATE bookmarks SET readOrArchivedAt = :now " +
-            "WHERE (isRead = 1 OR isArchived = 1) AND readOrArchivedAt IS NULL"
+            "WHERE isRead = 1 AND readOrArchivedAt IS NULL"
     )
     suspend fun stampReadOrArchived(now: Long): Int
 
     @Query(
         "UPDATE bookmarks SET readOrArchivedAt = NULL " +
-            "WHERE isRead = 0 AND isArchived = 0 AND readOrArchivedAt IS NOT NULL"
+            "WHERE isRead = 0 AND readOrArchivedAt IS NOT NULL"
     )
     suspend fun clearReadOrArchived(): Int
 

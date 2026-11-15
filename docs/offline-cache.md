@@ -8,9 +8,11 @@ or a single list's.
 
 ## Steps
 
-1. **Stamp.** `bookmarks.readOrArchivedAt` records when a bookmark was first seen read or
-   archived, and is cleared when it is neither again. Cleanup stamps it rather than every write
-   path, so it is precise to the sync cadence — plenty for a period counted in days.
+1. **Stamp.** `bookmarks.readOrArchivedAt` records when a bookmark was first seen read, and is
+   cleared when it is unread again. Archiving does not count, despite the column's name: an
+   archived bookmark that was never read keeps its copy, and a stamp left from when archiving
+   did count is cleared by the next pass. Cleanup stamps it rather than every write path, so it
+   is precise to the sync cadence — plenty for a period counted in days.
 2. **Retention** (*Settings → Sync & Data → Offline Storage → Remove read offline copies*, a
    switch, off by default). The period is a slider over `OfflineRetention.SLIDER_STOPS` — daily
    to a week, weekly to a month, then two and three months — plus a field taking any number of
@@ -58,7 +60,7 @@ stores those copies), so it asks with `opened = false`.
 
 `OfflineRetention.isRetired` is the Kotlin twin of `RETIRED_PREDICATE`. Sync skips content for a
 retired bookmark, and the reader shows a fetched body transiently instead of persisting it. It
-tests the current read/archived flags as well as the stamp, so a bookmark marked unread downloads
+tests the current read flag as well as the stamp, so a bookmark marked unread downloads
 again on the next sync without waiting for cleanup to clear its stamp.
 
 Sync also skips anything with `offlineEvictedAt` set (`OfflineRetention.skipsContentSync`). The
