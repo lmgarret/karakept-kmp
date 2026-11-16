@@ -9,6 +9,7 @@ import com.karakept.app.domain.ListMembershipChange
 import com.karakept.app.testing.testBookmark
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.Ordering
 import io.mockk.every
 import io.mockk.mockkStatic
 import io.mockk.slot
@@ -107,58 +108,83 @@ class MainScreenModelListMembershipTest {
     }
 
     @Test
-    fun `editing lists from a smart list view leaves the bookmark in it`() = runTest(testDispatcher) {
-        every { harness.listRepository.lists } returns MutableStateFlow(lists + smart)
-        val bookmark = testBookmark(1L, listIds = "s")
-        val model = harness.createModel()
-        advanceUntilIdle()
-        model.applyFilter(FilterConfig(lists = listOf("s")))
-        advanceUntilIdle()
+    fun `editing lists from a smart list view leaves the bookmark in it and probes its smart lists`() =
+        runTest(testDispatcher) {
+            val allLists = lists + smart
+            every { harness.listRepository.lists } returns MutableStateFlow(allLists)
+            val bookmark = testBookmark(1L, listIds = "s")
+            val model = harness.createModel()
+            advanceUntilIdle()
+            model.applyFilter(FilterConfig(lists = listOf("s")))
+            advanceUntilIdle()
 
-        model.updateBookmarkLists(listOf(bookmark), ListMembershipChange(added = setOf("a")))
-        advanceUntilIdle()
+            model.updateBookmarkLists(listOf(bookmark), ListMembershipChange(added = setOf("a")))
+            advanceUntilIdle()
 
-        coVerify(exactly = 1) { repository.batchAddToList(listOf(bookmark), "a") }
-        coVerify(exactly = 0) { repository.batchRemoveFromList(any(), any()) }
-        coVerify(exactly = 0) { harness.bookmarkRepository.syncSingleBookmark(any(), any()) }
-        coVerify(exactly = 0) { harness.bookmarkRepository.syncBookmarksForList(any(), "s", any()) }
-        assertEquals(setOf("s"), model._smartListsNeedingRefresh.value)
-    }
+            coVerify(exactly = 1) { repository.batchAddToList(listOf(bookmark), "a") }
+            coVerify(exactly = 0) { repository.batchRemoveFromList(any(), any()) }
+            coVerify(exactly = 0) { harness.bookmarkRepository.syncSingleBookmark(any(), any()) }
+            coVerify(exactly = 0) { harness.bookmarkRepository.syncBookmarksForList(any(), "s", any()) }
+            coVerify(ordering = Ordering.ORDERED) {
+                repository.batchAddToList(listOf(bookmark), "a")
+                repository.reconcileSmartListsAfterEdit(bookmark.serverId, listOf(bookmark.remoteId), allLists)
+            }
+        }
 
     @Test
-    fun `the smart list an edit was made from is synced when it is next opened`() = runTest(testDispatcher) {
+    fun `a smart list the probe left flagged is synced when it is next opened`() = runTest(testDispatcher) {
         every { harness.listRepository.lists } returns MutableStateFlow(lists + smart)
+        val flagged = mutableSetOf("s")
+        every { repository.takeSmartListRefresh(any()) } answers { flagged.remove(firstArg<String>()) }
         val model = harness.createModel()
-        advanceUntilIdle()
-        model.applyFilter(FilterConfig(lists = listOf("s")))
-        advanceUntilIdle()
-        model.updateBookmarkLists(listOf(testBookmark(1L, listIds = "s")), ListMembershipChange(added = setOf("a")))
         advanceUntilIdle()
 
         model.applyFilter(FilterConfig(lists = listOf("a")))
         advanceUntilIdle()
         model.applyFilter(FilterConfig(lists = listOf("s")))
         advanceUntilIdle()
+        model.applyFilter(FilterConfig(lists = listOf("a")))
+        advanceUntilIdle()
+        model.applyFilter(FilterConfig(lists = listOf("s")))
+        advanceUntilIdle()
 
         coVerify(exactly = 1) { harness.bookmarkRepository.syncBookmarksForList(server, "s", any()) }
-        assertEquals(emptySet(), model._smartListsNeedingRefresh.value)
     }
 
     @Test
-    fun `undo flags the smart lists again`() = runTest(testDispatcher) {
+    fun `undo probes the smart lists again`() = runTest(testDispatcher) {
         every { harness.listRepository.lists } returns MutableStateFlow(lists + smart)
         val undo = slot<suspend () -> Unit>()
         coEvery { harness.snackbarManager.showSnackbarWithUndo(any(), capture(undo), any()) } returns Unit
+        val bookmark = testBookmark(1L, listIds = "a")
         val model = harness.createModel()
         advanceUntilIdle()
-        model.updateBookmarkLists(listOf(testBookmark(1L, listIds = "a")), ListMembershipChange(added = setOf("b")))
+        model.updateBookmarkLists(listOf(bookmark), ListMembershipChange(added = setOf("b")))
         advanceUntilIdle()
-        model._smartListsNeedingRefresh.value = emptySet()
 
         undo.captured.invoke()
         advanceUntilIdle()
 
-        assertEquals(setOf("s"), model._smartListsNeedingRefresh.value)
+        coVerify(ordering = Ordering.ORDERED) {
+            repository.batchAddToList(listOf(bookmark), "b")
+            repository.reconcileSmartListsAfterEdit(bookmark.serverId, listOf(bookmark.remoteId), any())
+            repository.batchRemoveFromList(listOf(bookmark), "b")
+            repository.reconcileSmartListsAfterEdit(bookmark.serverId, listOf(bookmark.remoteId), any())
+        }
+    }
+
+    @Test
+    fun `only the bookmarks a change changes are probed`() = runTest(testDispatcher) {
+        val inB = testBookmark(1L, listIds = "b")
+        val inNone = testBookmark(2L, listIds = "")
+        val model = harness.createModel()
+        advanceUntilIdle()
+
+        model.updateBookmarkLists(listOf(inB, inNone), ListMembershipChange(added = setOf("b")))
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { repository.reconcileSmartListsAfterEdit(inNone.serverId, listOf(inNone.remoteId), any()) }
+        coVerify(exactly = 1) { repository.reconcileSmartListsAfterEdit(any(), any(), any()) }
     }
 
     @Test

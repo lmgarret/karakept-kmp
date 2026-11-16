@@ -817,6 +817,11 @@ class BookmarkViewerScreenModel(
         viewModelScope.launch {
             change.added.forEach { bookmarkActionsRepository.addToList(bookmark.remoteId, bookmark.serverId, it) }
             change.removed.forEach { bookmarkActionsRepository.removeFromList(bookmark.remoteId, bookmark.serverId, it) }
+            if (!change.isEmpty) {
+                bookmarkActionsRepository.reconcileSmartListsAfterEdit(
+                    bookmark.serverId, listOf(bookmark.remoteId), _lists.value ?: listRepository.lists.value
+                )
+            }
         }
     }
 

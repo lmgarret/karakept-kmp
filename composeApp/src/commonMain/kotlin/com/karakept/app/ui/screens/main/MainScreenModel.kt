@@ -168,10 +168,6 @@ class MainScreenModel(
     internal fun effectiveFilterNow(filter: FilterConfig = _currentFilter.value): FilterConfig =
         ListHierarchyUtils.expandFilterLists(filter, lists.value, listSettings.value)
 
-    // Smart lists that may have stale membership after a recent list-action.
-    // Cleared per-list after a successful sync when the user navigates to one.
-    internal val _smartListsNeedingRefresh = MutableStateFlow<Set<String>>(emptySet())
-
     // Pagination state
     internal val pageSize = PAGE_SIZE
     internal val _isLoadingMore = MutableStateFlow(false)

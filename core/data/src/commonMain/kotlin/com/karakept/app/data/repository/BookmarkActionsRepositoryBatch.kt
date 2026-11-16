@@ -155,6 +155,7 @@ suspend fun BookmarkActionsRepository.batchUpdateTags(bookmarks: List<Bookmark>,
 suspend fun BookmarkActionsRepository.batchAddToList(bookmarks: List<Bookmark>, listId: String) {
     withContext(appDispatchers.io) {
         bookmarks.forEach { bookmark ->
+            smartListProbe.noteListEdit(bookmark.serverId, bookmark.remoteId)
             val current = bookmarkDao.getBookmarkByRemoteId(bookmark.remoteId, bookmark.serverId)
             current?.let {
                 val currentListIds = it.listIds.split(",").map { id -> id.trim() }.filter { id -> id.isNotBlank() }
@@ -180,6 +181,7 @@ suspend fun BookmarkActionsRepository.batchAddToList(bookmarks: List<Bookmark>, 
 suspend fun BookmarkActionsRepository.batchRemoveFromList(bookmarks: List<Bookmark>, listId: String) {
     withContext(appDispatchers.io) {
         bookmarks.forEach { bookmark ->
+            smartListProbe.noteListEdit(bookmark.serverId, bookmark.remoteId)
             val current = bookmarkDao.getBookmarkByRemoteId(bookmark.remoteId, bookmark.serverId)
             current?.let {
                 val currentListIds = it.listIds.split(",").map { id -> id.trim() }.filter { id -> id.isNotBlank() }

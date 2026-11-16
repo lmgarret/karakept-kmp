@@ -27,16 +27,16 @@ internal fun resolveCurrentKey(listId: String?, filter: FilterConfig): SyncKey =
 }
 
 /**
- * Syncs the list just navigated to when a recent list-membership action may have left its
- * smart-list membership stale (GET /lists/{id}/bookmarks is always fresh), then folds the
- * result into the view in place so the correction lands without the list jumping.
+ * Syncs the list just navigated to when a list edit left its smart-list membership unsettled —
+ * one the edit's membership probe could not answer (`smartListsNeedingRefresh`).
+ * GET /lists/{id}/bookmarks is always fresh, and the result folds into the view in place so the
+ * correction lands without the list jumping.
  *
  * Called from the reload observer, so navigating away cancels it before it runs.
  */
 internal suspend fun MainScreenModel.refreshStaleSmartList(server: Server, filter: FilterConfig) {
     val listId = _currentListContext.value ?: return
-    if (listId !in _smartListsNeedingRefresh.value) return
-    _smartListsNeedingRefresh.value -= listId
+    if (!bookmarkActionsRepository.takeSmartListRefresh(listId)) return
     try {
         // The list just navigated to, so it takes the same exemption as syncCurrentView.
         bookmarkRepository.syncBookmarksForList(server, listId, isCurrentView = true)

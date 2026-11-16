@@ -80,6 +80,27 @@ internal suspend fun RemoteApiContext.fetchBookmarksForList(server: Server, list
     }
 }
 
+// One page of a list, without content, newest first — the order a membership probe's cursor
+// is built for, stated rather than left to the server's default.
+internal suspend fun RemoteApiContext.fetchListPage(
+    server: Server,
+    listId: String,
+    cursor: String?,
+    limit: Int
+): PaginatedBookmarks = guardedCall {
+    try {
+        listsApi(server).listsListIdBookmarksGet(
+            listId,
+            sortOrder = ListsApi.SortOrderListsListIdBookmarksGet.DESC,
+            limit = limit.toDouble(),
+            cursor = cursor,
+            includeContent = false
+        ).checkedBody()
+    } catch (e: Exception) {
+        throw ApiException("Error fetching a page of list $listId: ${e.message}", e)
+    }
+}
+
 internal suspend fun RemoteApiContext.testConnection(url: String, apiKey: String): Boolean = guardedCall {
     try {
          BookmarksApi(getBaseUrl(Server(id = "", url = url, apiKey = apiKey, label = "")), client).apply {

@@ -315,13 +315,29 @@ full-bleed and its divider reaches both edges.
 > **Rule:** a bookmark can be in any number of lists. Adding it to one never removes it from
 > another, locally or on screen — there is no "move".
 
-> **Rule:** smart-list membership is only ever written by a sync of that smart list
-> (`GET /lists/{id}/bookmarks`, reconciled in `BookmarkSyncPipeline.reconcileListMembership`).
-> Karakeep evaluates a smart list as a query and stores no membership for it, so
-> `GET /bookmarks/{id}/lists` (`List.forBookmark`, read from `bookmarksInLists`) reports manual
-> lists only — never read its answer as a bookmark's smart lists, and never drop one because it is
-> missing there. A list edit flags every smart list (`markSmartListsStale`) and the one opened
-> next is synced (`refreshStaleSmartList`); until then the bookmark stays where it was.
+> **Rule:** smart-list membership has exactly two writers: a sync of that smart list
+> (`GET /lists/{id}/bookmarks`, reconciled in `BookmarkSyncPipeline.reconcileListMembership`), and
+> the membership probe a list edit runs (`SmartListMembershipProbe`, through
+> `BookmarkActionsRepository.reconcileSmartListsAfterEdit`). Karakeep evaluates a smart list as a
+> query and stores no membership for it, so `GET /bookmarks/{id}/lists` (`List.forBookmark`, read
+> from `bookmarksInLists`) reports manual lists only — never read its answer as a bookmark's smart
+> lists, and never drop one because it is missing there.
+
+> **Rule:** the probe writes one smart-list id of one bookmark, and only from a page it can read.
+> It runs after a list edit, once `processPendingActions` has pushed the edit (a bookmark whose
+> list actions are still queued afterwards is not probed), and only against smart lists whose
+> `query` mentions `list:` or `inlist` (`SmartListProbeUtils.canDependOnListMembership` —
+> conservative: a false positive costs one request, a false negative leaves a list wrong). It asks
+> `GET /lists/{smartId}/bookmarks?limit=1&cursor={bookmarkId}_{createdAt}`: the route pages
+> newest first and applies the cursor inclusively, so the first row is the bookmark exactly when
+> the list holds it. Anything it cannot answer — offline, an unpushed edit, a failed request, a
+> first row that sorts before the bookmark, a `createdAt` with a millisecond part (the server
+> stores whole seconds, so it is a local fallback), a batch over `MAX_PROBE_REQUESTS` — is flagged
+> in `smartListsNeedingRefresh` and synced when that list is next opened (`refreshStaleSmartList`);
+> until then the bookmark stays where it was. A result whose bookmark has been edited again since
+> the probe started is dropped (that edit probes for itself), and the write is a compare-and-set
+> (`BookmarkDao.updateListIdsIfUnchanged`). Every list-edit path — sheet, swipe, their undos, batch
+> selection and the reader — goes through it.
 
 ### Tag editing and filtering
 

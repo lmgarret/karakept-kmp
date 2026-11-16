@@ -76,6 +76,9 @@ kotlin {
                 implementation(libs.junit)
                 implementation(libs.mockk)
                 implementation(libs.kotlinx.coroutines.test)
+                // The Docker integration suite talks to a real server; the app picks its engine
+                // in :composeApp, which this module's tests do not see.
+                implementation(libs.ktor.client.okhttp)
             }
         }
     }

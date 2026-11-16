@@ -44,6 +44,9 @@ internal class RemoteDataSource(
     suspend fun fetchBookmarksForList(server: Server, listId: String, includeContent: Boolean = false): List<Bookmark> =
         api.fetchBookmarksForList(server, listId, includeContent)
 
+    suspend fun fetchListPage(server: Server, listId: String, cursor: String?, limit: Int): PaginatedBookmarks =
+        api.fetchListPage(server, listId, cursor, limit)
+
     suspend fun testConnection(url: String, apiKey: String): Boolean = api.testConnection(url, apiKey)
 
     /** See [RemoteApiContext.fetchServerVersion]: null when the server predates `/api/version`. */

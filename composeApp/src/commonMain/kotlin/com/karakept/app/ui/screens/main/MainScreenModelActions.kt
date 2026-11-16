@@ -16,7 +16,6 @@
 package com.karakept.app.ui.screens.main
 
 import androidx.lifecycle.viewModelScope
-import com.karakept.api.model.KarakeepList
 import com.karakept.app.data.model.Bookmark
 import com.karakept.app.data.model.FilterStatus
 import com.karakept.app.domain.action.BookmarkActionEvent
@@ -80,26 +79,26 @@ fun MainScreenModel.updateBookmarkTags(bookmark: Bookmark, newTags: List<String>
 }
 
 /**
- * Flags every smart list for a sync the next time it is opened, after an edit that may have
- * changed which of them hold the edited bookmarks.
+ * Settles what a list edit of [bookmarks] did to their smart lists.
  *
- * Nothing is written to the bookmarks themselves. Karakeep evaluates a smart list as a query when
- * its bookmarks are asked for and records no membership anywhere, so no per-bookmark request can
- * say whether a bookmark is still in one; only syncing the smart list can (GET /lists/{id}/bookmarks,
- * see [refreshStaleSmartList]). Until then the bookmark stays in every view it was in.
+ * Karakeep evaluates a smart list as a query and records no membership, so only the server can
+ * say whether an edited bookmark is still in one. The repository asks it per bookmark once the
+ * edit has reached the server, and flags any smart list it could not ask about for a sync on its
+ * next open ([refreshStaleSmartList]). Until one of those answers, the bookmark stays in every
+ * view it was in.
  */
-internal fun MainScreenModel.markSmartListsStale() {
-    val smartListIds = listRepository.lists.value
-        .filter { it.type == KarakeepList.Type.SMART }
-        .mapNotNull { it.id }
-    _smartListsNeedingRefresh.value += smartListIds
+internal fun MainScreenModel.reconcileSmartLists(bookmarks: List<Bookmark>) {
+    val lists = listRepository.lists.value
+    bookmarks.groupBy { it.serverId }.forEach { (serverId, onServer) ->
+        bookmarkActionsRepository.reconcileSmartListsAfterEdit(serverId, onServer.map { it.remoteId }, lists)
+    }
 }
 
 fun MainScreenModel.addBookmarkToList(bookmark: Bookmark, listId: String) {
     _actedOnBookmarkIds.value += bookmark.remoteId
     viewModelScope.launch {
         bookmarkActionsRepository.addToList(bookmark.remoteId, bookmark.serverId, listId)
-        markSmartListsStale()
+        reconcileSmartLists(listOf(bookmark))
     }
 }
 
@@ -108,21 +107,22 @@ fun MainScreenModel.addBookmarkToList(bookmark: Bookmark, listId: String) {
  *
  * Nothing is taken out of a list the edit does not name: a bookmark can be in several lists, so
  * joining one says nothing about the list on screen. What the edit does to a smart list is the
- * server's to say, and it says so when that list is next synced ([markSmartListsStale]).
+ * server's to say ([reconcileSmartLists]).
  */
 fun MainScreenModel.updateBookmarkLists(bookmarks: List<Bookmark>, change: ListMembershipChange) {
     val operations = ListMembershipUtils.operationsFor(bookmarks, change)
     if (operations.isEmpty()) return
+    val edited = operations.flatMap { it.bookmarks }.distinctBy { it.remoteId }
     _actedOnBookmarkIds.value += operations.flatMap { op -> op.bookmarks.map { it.remoteId } }
     viewModelScope.launch {
         operations.forEach { applyListMembershipOperation(it) }
-        markSmartListsStale()
+        reconcileSmartLists(edited)
         val names = listRepository.lists.value.associate { it.id to it.name }
         snackbarManager.showSnackbarWithUndo(
             ListMembershipUtils.describeChange(change, bookmarks.size, names::get),
             onUndo = {
                 operations.forEach { applyListMembershipOperation(it.inverted()) }
-                markSmartListsStale()
+                reconcileSmartLists(edited)
             }
         )
     }
@@ -140,6 +140,7 @@ private suspend fun MainScreenModel.applyListMembershipOperation(operation: List
 fun MainScreenModel.restoreAndAddBookmarkToList(bookmark: Bookmark, listId: String) {
     viewModelScope.launch {
         bookmarkActionsRepository.addToList(bookmark.remoteId, bookmark.serverId, listId)
+        reconcileSmartLists(listOf(bookmark))
     }
 }
 
@@ -147,6 +148,7 @@ fun MainScreenModel.restoreAndAddBookmarkToList(bookmark: Bookmark, listId: Stri
 fun MainScreenModel.restoreAndRemoveBookmarkFromList(bookmark: Bookmark, listId: String) {
     viewModelScope.launch {
         bookmarkActionsRepository.removeFromList(bookmark.remoteId, bookmark.serverId, listId)
+        reconcileSmartLists(listOf(bookmark))
     }
 }
 
@@ -180,7 +182,7 @@ fun MainScreenModel.removeBookmarkFromList(bookmark: Bookmark, listId: String) {
         bookmarkActionsRepository.removeFromList(
             bookmark.remoteId, bookmark.serverId, listId
         )
-        markSmartListsStale()
+        reconcileSmartLists(listOf(bookmark))
     }
 }
 

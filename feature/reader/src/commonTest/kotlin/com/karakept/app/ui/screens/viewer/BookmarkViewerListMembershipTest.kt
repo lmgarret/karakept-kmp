@@ -19,6 +19,7 @@ import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -83,6 +84,7 @@ class BookmarkViewerListMembershipTest {
         every { settingsRepository.preferFullPageHtml } returns flowOf(false)
 
         every { serverRepository.servers } returns flowOf(listOf(testServer))
+        every { listRepository.lists } returns MutableStateFlow(emptyList())
         every { bookmarkRepository.observeBookmark(any()) } returns flowOf(bookmark)
         coEvery { assetRepository.assetsFor(any()) } returns emptyList()
     }
@@ -114,6 +116,36 @@ class BookmarkViewerListMembershipTest {
         coVerify(exactly = 1) { bookmarkActionsRepository.addToList(bookmark.remoteId, bookmark.serverId, "b") }
         coVerify(exactly = 1) { bookmarkActionsRepository.removeFromList(bookmark.remoteId, bookmark.serverId, "a") }
         coVerify(exactly = 0) { bookmarkActionsRepository.removeFromList(any(), any(), "smart") }
+    }
+
+    @Test
+    fun `an edit probes the bookmark's smart lists once it is applied`() = runTest(testDispatcher) {
+        val fetched = listOf(
+            KarakeepList(id = "a", name = "Read Later", type = KarakeepList.Type.MANUAL),
+            KarakeepList(id = "smart", name = "Not read later", type = KarakeepList.Type.SMART, query = "-list:\"Read Later\"")
+        )
+        coEvery { listRepository.fetchLists(testServer) } returns fetched
+        val screenModel = createScreenModel()
+        screenModel.loadLists(testServer)
+        advanceUntilIdle()
+
+        screenModel.updateBookmarkLists(bookmark, ListMembershipChange(removed = setOf("a")))
+        advanceUntilIdle()
+
+        coVerify(ordering = io.mockk.Ordering.ORDERED) {
+            bookmarkActionsRepository.removeFromList(bookmark.remoteId, bookmark.serverId, "a")
+            bookmarkActionsRepository.reconcileSmartListsAfterEdit(bookmark.serverId, listOf(bookmark.remoteId), fetched)
+        }
+    }
+
+    @Test
+    fun `an empty edit probes nothing`() = runTest(testDispatcher) {
+        val screenModel = createScreenModel()
+
+        screenModel.updateBookmarkLists(bookmark, ListMembershipChange())
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { bookmarkActionsRepository.reconcileSmartListsAfterEdit(any(), any(), any()) }
     }
 
     @Test
