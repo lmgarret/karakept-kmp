@@ -194,19 +194,33 @@ internal class BookmarkViewPredicateTest : InMemoryDatabaseTest() {
     }
 
     @Test
-    fun `the content filter selects on reading time`() = runBlocking {
-        insert(row(1, readingTimeMinutes = 5), row(2, readingTimeMinutes = 0))
+    fun `the content filter selects on stored content, not reading time`() = runBlocking {
+        val ids = insert(
+            row(1, content = "body", readingTimeMinutes = 5),
+            row(2, content = null, readingTimeMinutes = 0),
+            row(3, content = "body", readingTimeMinutes = 0),
+            row(4, content = "body", readingTimeMinutes = 7)
+        )
+        // An evicted copy: the body is gone, the reading time it was measured from is not.
+        db.bookmarkDao().evictForStorageCap(listOf(ids[3]), now = 1L)
 
-        assertEquals(listOf("remote-1"), selected(FilterConfig(contentFilter = ContentFilter.DOWNLOADED)).sorted())
-        assertEquals(listOf("remote-2"), selected(FilterConfig(contentFilter = ContentFilter.NOT_DOWNLOADED)).sorted())
+        assertEquals(
+            listOf("remote-1", "remote-3"),
+            selected(FilterConfig(contentFilter = ContentFilter.DOWNLOADED)).sorted()
+        )
+        assertEquals(
+            listOf("remote-2", "remote-4"),
+            selected(FilterConfig(contentFilter = ContentFilter.NOT_DOWNLOADED)).sorted(),
+            "an evicted row is not downloaded, whatever reading time it kept"
+        )
     }
 
     @Test
     fun `filters compose`() = runBlocking {
         insert(
-            row(1, tags = "kotlin", isRead = false, readingTimeMinutes = 5),
-            row(2, tags = "kotlin", isRead = true, readingTimeMinutes = 5),
-            row(3, tags = "rust", isRead = false, readingTimeMinutes = 5),
+            row(1, tags = "kotlin", isRead = false, readingTimeMinutes = 5, content = "body"),
+            row(2, tags = "kotlin", isRead = true, readingTimeMinutes = 5, content = "body"),
+            row(3, tags = "rust", isRead = false, readingTimeMinutes = 5, content = "body"),
             row(4, tags = "kotlin", isRead = false, readingTimeMinutes = 0)
         )
 

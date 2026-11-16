@@ -24,7 +24,9 @@ import kotlinx.coroutines.flow.Flow
 // travels with a screenful of rows. The columns left out of that projection — content,
 // crawlStatus, crawledAt, summary, summarizationStatus — come back as entity defaults, which is
 // what `RoomWarnings.QUERY_MISMATCH` is acknowledging on each of them; read those fields through
-// a full-row query (`getBookmarkById`, `getBookmarkByRemoteId`) instead.
+// a full-row query (`getBookmarkById`, `getBookmarkByRemoteId`) instead. `hasContent` is projected
+// on purpose: left out, it would default from the stubbed `content` to false, and the list row
+// reads it to say whether an offline copy exists.
 @Dao
 internal interface BookmarkDao {
     @Query("""
@@ -32,7 +34,7 @@ internal interface BookmarkDao {
                description, imageUrl, bannerImageAssetId, screenshotAssetId, tags, listIds, isStarred, isArchived,
                isRead, createdAt, readingTimeMinutes, readingProgress, readingScrollIndex, readingScrollOffset,
                modifiedAt, progressSyncedAt,
-               '' as content
+               hasContent, '' as content
         FROM bookmarks
         WHERE serverId = :serverId
         ORDER BY createdAt DESC
@@ -234,13 +236,13 @@ internal interface BookmarkDao {
 
     @Query(
         "UPDATE bookmarks SET readOrArchivedAt = :now " +
-            "WHERE (isRead = 1 OR isArchived = 1) AND readOrArchivedAt IS NULL"
+            "WHERE isRead = 1 AND readOrArchivedAt IS NULL"
     )
     suspend fun stampReadOrArchived(now: Long): Int
 
     @Query(
         "UPDATE bookmarks SET readOrArchivedAt = NULL " +
-            "WHERE isRead = 0 AND isArchived = 0 AND readOrArchivedAt IS NOT NULL"
+            "WHERE isRead = 0 AND readOrArchivedAt IS NOT NULL"
     )
     suspend fun clearReadOrArchived(): Int
 
@@ -354,7 +356,7 @@ internal interface BookmarkDao {
                description, imageUrl, bannerImageAssetId, screenshotAssetId, tags, listIds, isStarred, isArchived,
                isRead, createdAt, readingTimeMinutes, readingProgress, readingScrollIndex, readingScrollOffset,
                modifiedAt, progressSyncedAt,
-               '' as content
+               hasContent, '' as content
         FROM bookmarks
         WHERE serverId = :serverId
           AND isRead = 0
@@ -368,7 +370,7 @@ internal interface BookmarkDao {
                description, imageUrl, bannerImageAssetId, screenshotAssetId, tags, listIds, isStarred, isArchived,
                isRead, createdAt, readingTimeMinutes, readingProgress, readingScrollIndex, readingScrollOffset,
                modifiedAt, progressSyncedAt,
-               '' as content
+               hasContent, '' as content
         FROM bookmarks
         WHERE serverId = :serverId AND remoteId IN (:remoteIds)
     """)
@@ -410,7 +412,7 @@ internal interface BookmarkDao {
         "SELECT localId, remoteId, serverId, title, url, description, imageUrl, " +
             "bannerImageAssetId, screenshotAssetId, tags, listIds, isStarred, isArchived, " +
             "isRead, createdAt, readingTimeMinutes, readingProgress, readingScrollIndex, " +
-            "readingScrollOffset, modifiedAt, progressSyncedAt, '' as content " +
+            "readingScrollOffset, modifiedAt, progressSyncedAt, hasContent, '' as content " +
             "FROM bookmarks WHERE serverId = :serverId AND " + OFFLINE_PREDICATE +
             " ORDER BY createdAt DESC"
     )
@@ -442,7 +444,7 @@ internal interface BookmarkDao {
                description, imageUrl, bannerImageAssetId, screenshotAssetId, tags, listIds, isStarred, isArchived,
                isRead, createdAt, readingTimeMinutes, readingProgress, readingScrollIndex, readingScrollOffset,
                modifiedAt, progressSyncedAt,
-               '' as content
+               hasContent, '' as content
         FROM bookmarks
         WHERE serverId = :serverId AND isArchived = 0
         ORDER BY createdAt DESC
@@ -455,7 +457,7 @@ internal interface BookmarkDao {
                description, imageUrl, bannerImageAssetId, screenshotAssetId, tags, listIds, isStarred, isArchived,
                isRead, createdAt, readingTimeMinutes, readingProgress, readingScrollIndex, readingScrollOffset,
                modifiedAt, progressSyncedAt,
-               '' as content
+               hasContent, '' as content
         FROM bookmarks
         WHERE serverId = :serverId AND isStarred = 1
         ORDER BY createdAt DESC
@@ -468,7 +470,7 @@ internal interface BookmarkDao {
                description, imageUrl, bannerImageAssetId, screenshotAssetId, tags, listIds, isStarred, isArchived,
                isRead, createdAt, readingTimeMinutes, readingProgress, readingScrollIndex, readingScrollOffset,
                modifiedAt, progressSyncedAt,
-               '' as content
+               hasContent, '' as content
         FROM bookmarks
         WHERE serverId = :serverId AND isArchived = 1
         ORDER BY createdAt DESC
@@ -481,7 +483,7 @@ internal interface BookmarkDao {
                description, imageUrl, bannerImageAssetId, screenshotAssetId, tags, listIds, isStarred, isArchived,
                isRead, createdAt, readingTimeMinutes, readingProgress, readingScrollIndex, readingScrollOffset,
                modifiedAt, progressSyncedAt,
-               '' as content
+               hasContent, '' as content
         FROM bookmarks
         WHERE serverId = :serverId
         ORDER BY createdAt DESC
@@ -494,7 +496,7 @@ internal interface BookmarkDao {
                description, imageUrl, bannerImageAssetId, screenshotAssetId, tags, listIds, isStarred, isArchived,
                isRead, createdAt, readingTimeMinutes, readingProgress, readingScrollIndex, readingScrollOffset,
                modifiedAt, progressSyncedAt,
-               '' as content
+               hasContent, '' as content
         FROM bookmarks
         WHERE serverId = :serverId
         AND (listIds = :listId

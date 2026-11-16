@@ -374,7 +374,6 @@ internal class BookmarkSyncPipeline(
         // Content cleanup dropped stays dropped: re-sending it here would undo the eviction.
         val skipsContent = existing?.offlineEvictedAt != null || OfflineRetention.isRetired(
             isRead = existing?.isRead ?: false,
-            isArchived = dto.archived ?: false,
             readOrArchivedAt = existing?.readOrArchivedAt,
             retentionDays = retentionDays,
             now = startedAt

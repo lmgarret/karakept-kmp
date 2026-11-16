@@ -12,15 +12,13 @@ class OfflineRetentionTest {
 
     private fun retired(
         isRead: Boolean = true,
-        isArchived: Boolean = false,
         since: Long? = now - 8 * DAY_MILLIS,
         days: Int? = 7
-    ) = OfflineRetention.isRetired(isRead, isArchived, since, days, now)
+    ) = OfflineRetention.isRetired(isRead, since, days, now)
 
     @Test
-    fun readOrArchivedPastTheWindowIsRetired() {
+    fun readPastTheWindowIsRetired() {
         assertTrue(retired())
-        assertTrue(retired(isRead = false, isArchived = true))
         assertTrue(retired(since = now - 7 * DAY_MILLIS), "the boundary itself counts")
     }
 
@@ -38,7 +36,7 @@ class OfflineRetentionTest {
     @Test
     fun aStaleStampOnAnUnreadBookmarkDoesNotRetireIt() {
         // The stamp is only cleared by the next cleanup; the flags are what is current.
-        assertFalse(retired(isRead = false, isArchived = false))
+        assertFalse(retired(isRead = false))
     }
 
     @Test

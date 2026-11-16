@@ -10,6 +10,7 @@ import com.karakept.app.data.model.ReadFilter
 import com.karakept.app.data.model.SortOption
 import com.karakept.app.data.repository.BookmarkRepository
 import com.karakept.app.domain.BookmarkFilterUtils
+import com.karakept.app.testing.testBookmarkEntity
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.Before
@@ -66,8 +67,8 @@ internal class BookmarkViewIndexAgreementTest : InMemoryDatabaseTest() {
                     serverId = serverId,
                     url = "https://example.com/$id",
                     title = titles[id % titles.size],
-                    // Kept consistent with readingTimeMinutes: the OFFLINE view is the one
-                    // place the two sides genuinely differ, and it has its own test below.
+                    // Kept consistent with readingTimeMinutes here; the test below covers rows
+                    // where the two part.
                     content = if (hasContent) "body of $id" else null,
                     imageUrl = null,
                     bannerImageAssetId = null,
@@ -379,45 +380,49 @@ internal class BookmarkViewIndexAgreementTest : InMemoryDatabaseTest() {
     }
 
     /**
-     * The one view that cannot be indexed from memory.
-     *
-     * `FilterStatus.OFFLINE` selects on a non-empty `content` column, and every query behind an
-     * in-memory row strips that column — so the in-memory side stands on the `readingTimeMinutes`
-     * proxy instead (see [BookmarkFilterUtils.countForView]). The proxy is not the same predicate,
-     * and this pins what happens when they part: a row with content but no reading time is in the
-     * query's view and not in memory's, which shifts every index below it.
+     * Rows where a stored body and a reading time part — measured but evicted, stored but never
+     * measured. The list projections carry `hasContent`, so the in-memory side reads the same
+     * column the query does and the offline and content-filtered views agree row for row.
      */
     @Test
-    fun `the offline view cannot be indexed from the in-memory rows`() = runBlocking {
-        db.bookmarkDao().insertBookmarks(
+    fun `the offline and content views agree when a copy and its reading time part`() = runBlocking {
+        val ids = db.bookmarkDao().insertBookmarks(
             listOf(
-                BookmarkEntity(
+                testBookmarkEntity(
+                    localId = 0,
                     remoteId = "offline-no-reading-time",
                     serverId = serverId,
-                    url = "https://example.com/offline",
                     title = "Downloaded but unmeasured",
                     content = "body",
-                    imageUrl = null,
-                    bannerImageAssetId = null,
-                    screenshotAssetId = null,
-                    description = null,
                     createdAt = 1_900_000_000_000L,
-                    isArchived = false,
-                    isStarred = false,
                     readingTimeMinutes = 0
+                ),
+                testBookmarkEntity(
+                    localId = 0,
+                    remoteId = "evicted-with-reading-time",
+                    serverId = serverId,
+                    title = "Measured, then evicted",
+                    content = "body",
+                    createdAt = 1_900_000_000_001L,
+                    readingTimeMinutes = 8
                 )
             )
         )
-        val filter = FilterConfig(status = FilterStatus.OFFLINE)
-        val paged = pagedView(filter).map { it.localId }
-        val inMemory = BookmarkFilterUtils
-            .orderedViewFor(allBookmarks(), filter)
-            .map { it.localId }
+        db.bookmarkDao().evictForStorageCap(listOf(ids[1]), now = 1L)
 
+        for (filter in listOf(
+            FilterConfig(status = FilterStatus.OFFLINE),
+            FilterConfig(contentFilter = ContentFilter.DOWNLOADED),
+            FilterConfig(contentFilter = ContentFilter.NOT_DOWNLOADED)
+        )) {
+            assertAgrees(filter, "$filter")
+        }
         assertTrue(
-            paged != inMemory,
-            "if the proxy has been replaced by a real predicate, index the offline view from " +
-                "memory like every other view and delete this test"
+            ids[1] in pagedView(FilterConfig(contentFilter = ContentFilter.NOT_DOWNLOADED)).map { it.localId },
+            "an evicted row is not downloaded"
+        )
+        assertTrue(
+            ids[1] !in pagedView(FilterConfig(status = FilterStatus.OFFLINE)).map { it.localId }
         )
     }
 }

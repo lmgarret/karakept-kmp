@@ -102,10 +102,11 @@ internal fun BookmarkListMetadata(
             UrlDisplay(url = bookmark.url, urlDisplayMode = urlDisplayMode, urlIconMode = urlIconMode, iconSize = faviconByLinkSize, faviconPainter = faviconPainter, modifier = Modifier.padding(end = 8.dp))
         }
         if (showReadingTime) {
-            if (bookmark.readingTimeMinutes > 0) {
-                ReadingTimeBadge(readingTimeMinutes = bookmark.readingTimeMinutes)
-            } else if (offlineMode) {
+            // A reading time survives eviction of the copy, so it cannot say whether one exists.
+            if (offlineMode && !bookmark.hasOfflineCopy) {
                 NotSyncedBadge()
+            } else if (bookmark.readingTimeMinutes > 0) {
+                ReadingTimeBadge(readingTimeMinutes = bookmark.readingTimeMinutes)
             }
         }
     }

@@ -33,7 +33,8 @@ class BookmarkFilterUtilsTest {
         isRead: Boolean = false,
         createdAt: Long = idCounter,
         readingTimeMinutes: Int = 0,
-        description: String? = null
+        description: String? = null,
+        content: String? = null
     ) = testBookmarkEntity(
         localId = idCounter,
         serverId = "server-1",
@@ -46,7 +47,8 @@ class BookmarkFilterUtilsTest {
         isArchived = isArchived,
         isRead = isRead,
         createdAt = createdAt,
-        readingTimeMinutes = readingTimeMinutes
+        readingTimeMinutes = readingTimeMinutes,
+        content = content
     )
 
     // -------------------------------------------------------------------------
@@ -519,8 +521,10 @@ class BookmarkFilterUtilsTest {
     @Test
     fun viewFor_narrowsOnContent() {
         val all = listOf(
-            makeBookmark(readingTimeMinutes = 5),
-            makeBookmark(readingTimeMinutes = 0)
+            makeBookmark(readingTimeMinutes = 5, content = "body"),
+            makeBookmark(readingTimeMinutes = 0),
+            // Evicted: a reading time with no stored body is not downloaded.
+            makeBookmark(readingTimeMinutes = 5)
         )
         assertEquals(
             1,
@@ -559,7 +563,7 @@ class BookmarkFilterUtilsTest {
 
     @Test
     fun viewFor_offline_takesTheRepositoryCount() {
-        // `content` is stripped from these rows, so the offline view's own count is the answer.
+        // The unnarrowed offline view takes the database's own count.
         val all = listOf(makeBookmark(), makeBookmark(), makeBookmark())
         assertEquals(
             7,
@@ -572,11 +576,11 @@ class BookmarkFilterUtilsTest {
     }
 
     @Test
-    fun viewFor_narrowedOffline_fallsBackToTheReadingTimeProxy() {
+    fun viewFor_narrowedOffline_selectsOnStoredContent() {
         val all = listOf(
+            makeBookmark(tags = "kotlin", readingTimeMinutes = 5, content = "body"),
             makeBookmark(tags = "kotlin", readingTimeMinutes = 5),
-            makeBookmark(tags = "kotlin", readingTimeMinutes = 0),
-            makeBookmark(tags = "swift", readingTimeMinutes = 5)
+            makeBookmark(tags = "swift", readingTimeMinutes = 5, content = "body")
         )
         assertEquals(
             1,

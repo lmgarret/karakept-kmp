@@ -7,6 +7,10 @@ import com.karakept.app.data.cache.NoThumbnailCache
 import com.karakept.app.data.cache.ThumbnailCache
 import com.karakept.app.data.local.entity.AssetEntity
 import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.local.entity.toBookmark
+import com.karakept.app.data.model.ContentFilter
+import com.karakept.app.data.model.FilterConfig
+import com.karakept.app.data.repository.BookmarkRepository
 import com.karakept.app.data.local.migrations.MIGRATION_14_15
 import com.karakept.app.data.local.migrations.MIGRATION_15_16
 import com.karakept.app.data.local.migrations.withAppSchema
@@ -28,6 +32,7 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
 
@@ -115,16 +120,18 @@ class OfflineCacheCleanupTest {
     private suspend fun row(id: String) = db.bookmarkDao().getBookmarkByRemoteId(id, serverId)!!
 
     @Test
-    fun `stamps bookmarks when they become read or archived and clears the stamp when they go back`() = runBlocking {
+    fun `stamps bookmarks when they become read and clears the stamp when they go back`() = runBlocking {
         db.bookmarkDao().insertBookmark(bookmark("read", isRead = true))
         db.bookmarkDao().insertBookmark(bookmark("archived", isArchived = true))
+        db.bookmarkDao().insertBookmark(bookmark("archived-stamped", isArchived = true, readOrArchivedAt = 5L))
         db.bookmarkDao().insertBookmark(bookmark("unread-again", readOrArchivedAt = 5L))
         db.bookmarkDao().insertBookmark(bookmark("already", isRead = true, readOrArchivedAt = 5L))
 
         cleaner(retentionDays = null).cleanUp()
 
         assertEquals(now, row("read").readOrArchivedAt)
-        assertEquals(now, row("archived").readOrArchivedAt)
+        assertNull(row("archived").readOrArchivedAt, "archiving is not reading")
+        assertNull(row("archived-stamped").readOrArchivedAt, "a stamp from when archiving counted goes")
         assertNull(row("unread-again").readOrArchivedAt)
         assertEquals(5L, row("already").readOrArchivedAt, "the first time it was seen read is kept")
         db.close()
@@ -133,7 +140,8 @@ class OfflineCacheCleanupTest {
     @Test
     fun `drops the body of bookmarks read longer ago than the retention period`() = runBlocking {
         db.bookmarkDao().insertBookmark(bookmark("old", isRead = true, readOrArchivedAt = now - 8 * DAY_MILLIS))
-        db.bookmarkDao().insertBookmark(bookmark("recent", isArchived = true, readOrArchivedAt = now - 6 * DAY_MILLIS))
+        db.bookmarkDao().insertBookmark(bookmark("recent", isRead = true, readOrArchivedAt = now - 6 * DAY_MILLIS))
+        db.bookmarkDao().insertBookmark(bookmark("archived", isArchived = true, readOrArchivedAt = now - 8 * DAY_MILLIS))
         db.bookmarkDao().insertBookmark(bookmark("unread"))
 
         val result = cleaner(retentionDays = 7).cleanUp()
@@ -145,7 +153,34 @@ class OfflineCacheCleanupTest {
             assertEquals(true, isRead, "only the offline copy goes, the bookmark stays")
         }
         assertEquals("<p>body</p>", row("recent").content)
+        assertEquals("<p>body</p>", row("archived").content, "archived but unread keeps its copy")
         assertEquals("<p>body</p>", row("unread").content)
+        db.close()
+    }
+
+    @Test
+    fun `an evicted row reads as not downloaded in the list though it keeps its reading time`() = runBlocking {
+        db.bookmarkDao().insertBookmark(
+            bookmark("old", isRead = true, readOrArchivedAt = now - 8 * DAY_MILLIS).copy(readingTimeMinutes = 6)
+        )
+        db.bookmarkDao().insertBookmark(bookmark("kept").copy(readingTimeMinutes = 4))
+
+        cleaner(retentionDays = 7).cleanUp()
+
+        // What the bookmark list renders from: a list projection, mapped to the domain model.
+        val listed = db.bookmarkDao().getBookmarksForServer(serverId).first()
+            .map { it.toBookmark() }.associateBy { it.remoteId }
+        with(listed.getValue("old")) {
+            assertEquals(false, hasOfflineCopy, "the row must not look synced once its copy is gone")
+            assertEquals(6, readingTimeMinutes, "eviction leaves the reading time, so it is no proxy")
+        }
+        assertEquals(true, listed.getValue("kept").hasOfflineCopy)
+
+        suspend fun view(filter: ContentFilter) = db.bookmarkDao().getBookmarksPaged(
+            BookmarkRepository.buildPagedQuery(serverId, FilterConfig(contentFilter = filter), limit = 100)
+        ).map { it.remoteId }
+        assertEquals(listOf("old"), view(ContentFilter.NOT_DOWNLOADED))
+        assertEquals(listOf("kept"), view(ContentFilter.DOWNLOADED))
         db.close()
     }
 
@@ -484,7 +519,7 @@ class OfflineCacheCleanupTest {
         db.bookmarkDao().insertBookmark(
             bookmark("old-1", isRead = true, readOrArchivedAt = 1L, content = img("img_own") + img("img_shared"))
         )
-        db.bookmarkDao().insertBookmark(bookmark("old-2", isArchived = true, readOrArchivedAt = 1L, content = "abcd"))
+        db.bookmarkDao().insertBookmark(bookmark("old-2", isRead = true, readOrArchivedAt = 1L, content = "abcd"))
         db.bookmarkDao().insertBookmark(bookmark("unread-big", lastOpenedAt = 1, content = img("img_big")))
         db.bookmarkDao().insertBookmark(bookmark("unread-new", lastOpenedAt = 99, content = img("img_shared")))
         val files = FakeFiles(

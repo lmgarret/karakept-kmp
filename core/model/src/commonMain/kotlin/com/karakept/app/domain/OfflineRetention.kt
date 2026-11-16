@@ -48,13 +48,12 @@ object OfflineRetention {
 
     fun isRetired(
         isRead: Boolean,
-        isArchived: Boolean,
         readOrArchivedAt: Long?,
         retentionDays: Int?,
         now: Long
     ): Boolean {
         if (retentionDays == null) return false
-        if (!isRead && !isArchived) return false
+        if (!isRead) return false
         val since = readOrArchivedAt ?: return false
         return since <= cutoff(retentionDays, now)
     }

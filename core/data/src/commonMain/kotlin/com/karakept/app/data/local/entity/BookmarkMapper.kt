@@ -28,7 +28,8 @@ internal fun BookmarkEntity.toBookmark(): Bookmark = Bookmark(
     crawlStatus = crawlStatus,
     crawledAt = crawledAt,
     summary = summary,
-    summarizationStatus = summarizationStatus
+    summarizationStatus = summarizationStatus,
+    hasOfflineCopy = hasContent
 )
 
 internal fun List<BookmarkEntity>.toBookmarks(): List<Bookmark> = map { it.toBookmark() }

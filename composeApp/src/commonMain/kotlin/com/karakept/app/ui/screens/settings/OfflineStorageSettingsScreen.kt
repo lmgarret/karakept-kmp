@@ -217,7 +217,7 @@ private fun OfflineRetentionCard(
                         style = MaterialTheme.typography.titleMedium
                     )
                     Text(
-                        text = "Frees the stored article and images of bookmarks once they have been read or archived for a while. The bookmark itself stays.",
+                        text = "Frees the stored article and images of bookmarks once they have been read for a while. Archived bookmarks you have not read keep theirs. The bookmark itself stays.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

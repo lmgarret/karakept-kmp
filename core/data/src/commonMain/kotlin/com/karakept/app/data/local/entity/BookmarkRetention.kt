@@ -7,4 +7,4 @@ internal fun OfflineRetention.skipsContentSync(bookmark: BookmarkEntity, retenti
     bookmark.offlineEvictedAt != null || isRetired(bookmark, retentionDays, now)
 
 internal fun OfflineRetention.isRetired(bookmark: BookmarkEntity, retentionDays: Int?, now: Long): Boolean =
-    isRetired(bookmark.isRead, bookmark.isArchived, bookmark.readOrArchivedAt, retentionDays, now)
+    isRetired(bookmark.isRead, bookmark.readOrArchivedAt, retentionDays, now)

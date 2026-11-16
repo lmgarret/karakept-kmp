@@ -75,8 +75,8 @@ internal object BookmarkFilterUtils {
         if (filter.contentFilter != ContentFilter.ALL) {
             result = result.filter { bm ->
                 when (filter.contentFilter) {
-                    ContentFilter.DOWNLOADED     -> bm.readingTimeMinutes > 0
-                    ContentFilter.NOT_DOWNLOADED -> bm.readingTimeMinutes == 0
+                    ContentFilter.DOWNLOADED     -> bm.hasContent
+                    ContentFilter.NOT_DOWNLOADED -> !bm.hasContent
                     ContentFilter.ALL            -> true
                 }
             }
@@ -121,11 +121,9 @@ internal object BookmarkFilterUtils {
     /**
      * How many rows the view holds in total, loaded or not — [view]'s own size, except offline.
      *
-     * `FilterStatus.OFFLINE` selects on a non-empty `content` column, and the queries behind an
-     * in-memory row strip that column, so [view] can only approximate it through the reading-time
-     * proxy [ContentFilter.DOWNLOADED] stands on. [offlineCount] is the database's own answer for
-     * the unnarrowed offline view and is preferred where it applies; a narrowed one has no exact
-     * answer here and keeps the proxy, which at least agrees with the rows [view] can name.
+     * `FilterStatus.OFFLINE` selects on `hasContent`, which the queries behind an in-memory row
+     * project alongside the stripped `content`. [offlineCount] is the database's own answer for
+     * the unnarrowed offline view and is preferred where it applies.
      */
     fun countForView(
         view: List<BookmarkEntity>,
@@ -149,8 +147,7 @@ internal object BookmarkFilterUtils {
         FilterStatus.ALL_INCLUDING_ARCHIVED -> bookmarks
         FilterStatus.FAVORITES -> bookmarks.filter { it.isStarred }
         FilterStatus.ARCHIVED -> bookmarks.filter { it.isArchived }
-        // The column this really selects on is stripped from in-memory rows; see [countForView].
-        FilterStatus.OFFLINE -> bookmarks.filter { it.readingTimeMinutes > 0 }
+        FilterStatus.OFFLINE -> bookmarks.filter { it.hasContent }
     }
 
     /**
@@ -246,8 +243,8 @@ internal object BookmarkFilterUtils {
         if (filter.contentFilter != ContentFilter.ALL) {
             result = result.filter { bm ->
                 when (filter.contentFilter) {
-                    ContentFilter.DOWNLOADED     -> bm.readingTimeMinutes > 0
-                    ContentFilter.NOT_DOWNLOADED -> bm.readingTimeMinutes == 0
+                    ContentFilter.DOWNLOADED     -> bm.hasContent
+                    ContentFilter.NOT_DOWNLOADED -> !bm.hasContent
                     ContentFilter.ALL            -> true
                 }
             }
