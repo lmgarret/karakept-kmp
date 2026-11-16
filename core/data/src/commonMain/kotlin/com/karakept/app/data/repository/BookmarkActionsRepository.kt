@@ -324,7 +324,7 @@ class BookmarkActionsRepository internal constructor(
         withContext(appDispatchers.io) {
             // Update local DB immediately (optimistic update). Only the target list is touched:
             // a bookmark can be in any number of lists, and what the addition does to its smart
-            // lists is the server's to say (see reconcileBookmarkSmartListMembership).
+            // lists is the server's to say, on the next sync of each smart list.
             val bookmark = bookmarkDao.getBookmarkByRemoteId(bookmarkRemoteId, serverId)
             bookmark?.let {
                 val currentListIds = it.listIds.split(",").map { id -> id.trim() }.filter { id -> id.isNotBlank() }

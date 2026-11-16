@@ -13,7 +13,6 @@ import com.karakept.app.data.repository.HighlightRepository
 import com.karakept.app.data.repository.ListRepository
 import com.karakept.app.data.repository.ServerRepository
 import com.karakept.app.data.repository.SettingsRepository
-import com.karakept.app.data.repository.flushPendingActions
 import com.karakept.app.domain.action.ActionSnackbarManager
 import com.karakept.app.domain.action.BookmarkActionController
 import com.karakept.app.domain.action.UndoCompletedEvent
@@ -21,8 +20,6 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
-import io.mockk.mockkStatic
-import io.mockk.unmockkStatic
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -45,10 +42,10 @@ import com.karakept.app.utils.TestAppDispatchers
 /**
  * Tests for the deferred smart-list refresh mechanism (LIST-02 fix).
  *
- * When a list-membership action triggers reconciliation and the server returns stale
- * smart-list data, smart lists are marked for deferred refresh. When the user navigates
- * to one of those lists, syncBookmarksForList is called (GET /lists/{id}/bookmarks is
- * always fresh, unlike GET /bookmarks/{id}/lists).
+ * A list-membership action marks every smart list for refresh: Karakeep evaluates a smart list as
+ * a query and records no membership, so GET /bookmarks/{id}/lists never names one and only a sync
+ * of the smart list itself (GET /lists/{id}/bookmarks) says what is in it. When the user navigates
+ * to a marked list, syncBookmarksForList is called.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class SmartListDeferredRefreshTest {
@@ -101,9 +98,6 @@ class SmartListDeferredRefreshTest {
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
 
-        mockkStatic("com.karakept.app.data.repository.BookmarkActionsRepositorySyncKt")
-        coEvery { any<BookmarkActionsRepository>().flushPendingActions(any()) } returns Unit
-
         coEvery {
             bookmarkRepository.getBookmarksPaged(any(), any(), any(), any(), any(), any())
         } returns emptyList()
@@ -128,7 +122,6 @@ class SmartListDeferredRefreshTest {
     @AfterTest
     fun tearDown() {
         Dispatchers.resetMain()
-        unmockkStatic("com.karakept.app.data.repository.BookmarkActionsRepositorySyncKt")
     }
 
     private fun bookmarkEntity(localId: Long = 1L, listIds: String = "") =
@@ -140,17 +133,14 @@ class SmartListDeferredRefreshTest {
     private fun manualList(id: String) =
         KarakeepList(id = id, name = "Manual $id", type = KarakeepList.Type.MANUAL)
 
-    // ---- Flag-setting tests (reconcileBookmarkLists → _smartListsNeedingRefresh) ----
+    // ---- Flag-setting tests (markSmartListsStale → _smartListsNeedingRefresh) ----
 
     @Test
-    fun staleReconciliation_marksSmartListsForRefresh() = runTest(testDispatcher) {
+    fun listEdit_marksEverySmartListForRefresh() = runTest(testDispatcher) {
         createModel()
         advanceUntilIdle()
 
         listsFlow.value = listOf(smartList("smartA"), smartList("smartB"), manualList("manualC"))
-        coEvery {
-            bookmarkRepository.reconcileBookmarkSmartListMembership(any(), any(), any())
-        } returns false
 
         val bookmark = bookmarkEntity(localId = 1L, listIds = "manualC")
 
@@ -164,33 +154,11 @@ class SmartListDeferredRefreshTest {
     }
 
     @Test
-    fun freshReconciliation_doesNotMarkSmartListsForRefresh() = runTest(testDispatcher) {
+    fun addToList_marksSmartLists() = runTest(testDispatcher) {
         createModel()
         advanceUntilIdle()
 
         listsFlow.value = listOf(smartList("smartA"), manualList("manualC"))
-        coEvery {
-            bookmarkRepository.reconcileBookmarkSmartListMembership(any(), any(), any())
-        } returns true
-
-        val bookmark = bookmarkEntity(localId = 2L, listIds = "smartA,manualC")
-
-        model.removeBookmarkFromList(bookmark, "manualC")
-        advanceUntilIdle()
-
-        assertTrue(model._smartListsNeedingRefresh.value.isEmpty(),
-            "No smart lists should be marked when reconciliation returned fresh data")
-    }
-
-    @Test
-    fun addToList_marksSmartListsWhenStale() = runTest(testDispatcher) {
-        createModel()
-        advanceUntilIdle()
-
-        listsFlow.value = listOf(smartList("smartA"), manualList("manualC"))
-        coEvery {
-            bookmarkRepository.reconcileBookmarkSmartListMembership(any(), any(), any())
-        } returns false
 
         val bookmark = bookmarkEntity(localId = 3L, listIds = "")
 
@@ -293,7 +261,7 @@ class SmartListDeferredRefreshTest {
     // ---- End-to-end flows ----
 
     @Test
-    fun endToEnd_removeFromList_stale_thenNavigate_triggersSync() = runTest(testDispatcher) {
+    fun endToEnd_removeFromList_thenNavigate_triggersSync() = runTest(testDispatcher) {
         createModel()
         advanceUntilIdle()
 
@@ -301,9 +269,6 @@ class SmartListDeferredRefreshTest {
         val bookmark = bookmarkEntity(localId = 5L, listIds = "manualB")
         model._currentListContext.value = "manualB"
 
-        coEvery {
-            bookmarkRepository.reconcileBookmarkSmartListMembership(any(), eq(5L), any())
-        } returns false
 
         model.removeBookmarkFromList(bookmark, "manualB")
         advanceUntilIdle()
@@ -316,39 +281,14 @@ class SmartListDeferredRefreshTest {
         assertTrue(model._smartListsNeedingRefresh.value.isEmpty())
     }
 
-    @Test
-    fun endToEnd_freshReconciliation_navigateDoesNotSync() = runTest(testDispatcher) {
-        createModel()
-        advanceUntilIdle()
-
-        listsFlow.value = listOf(smartList("smartA"), manualList("manualB"))
-        val bookmark = bookmarkEntity(localId = 6L, listIds = "smartA,manualB")
-
-        coEvery {
-            bookmarkRepository.reconcileBookmarkSmartListMembership(any(), eq(6L), any())
-        } returns true
-
-        model.removeBookmarkFromList(bookmark, "manualB")
-        advanceUntilIdle()
-        assertTrue(model._smartListsNeedingRefresh.value.isEmpty())
-
-        model.applyFilter(FilterConfig(lists = listOf("smartA")))
-        advanceUntilIdle()
-
-        coVerify(exactly = 0) { bookmarkRepository.syncBookmarksForList(any(), eq("smartA"), any()) }
-    }
-
     // ---- Flag accumulation ----
 
     @Test
-    fun multipleStaleActions_accumulateFlags() = runTest(testDispatcher) {
+    fun multipleActions_accumulateFlags() = runTest(testDispatcher) {
         createModel()
         advanceUntilIdle()
 
         listsFlow.value = listOf(smartList("smartA"), smartList("smartB"), manualList("manualC"))
-        coEvery {
-            bookmarkRepository.reconcileBookmarkSmartListMembership(any(), any(), any())
-        } returns false
 
         val bk1 = bookmarkEntity(localId = 10L, listIds = "manualC")
         val bk2 = bookmarkEntity(localId = 11L, listIds = "manualC")

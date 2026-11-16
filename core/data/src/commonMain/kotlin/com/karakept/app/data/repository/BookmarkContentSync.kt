@@ -2,6 +2,7 @@ package com.karakept.app.data.repository
 
 import com.karakept.app.data.cache.ImageCacheManager
 import com.karakept.app.data.local.dao.BookmarkDao
+import com.karakept.app.data.local.dao.ListDao
 import com.karakept.app.data.model.Server
 import com.karakept.app.data.remote.RemoteDataSource
 import com.karakept.app.utils.AppLogger
@@ -16,6 +17,7 @@ import kotlinx.coroutines.flow.first
  */
 internal class BookmarkContentSync(
     private val bookmarkDao: BookmarkDao,
+    private val listDao: ListDao,
     private val remoteDataSource: RemoteDataSource,
     private val settingsRepository: SettingsRepository,
     private val serverRepository: ServerRepository,
@@ -68,9 +70,9 @@ internal class BookmarkContentSync(
             // Fetch fresh list memberships from the server. Falls back to the existing
             // value on failure so a transient network issue doesn't wipe local state.
             val refreshedListIds = try {
-                remoteDataSource.fetchListsForBookmark(server, existing.remoteId)
+                val manualListIds = remoteDataSource.fetchListsForBookmark(server, existing.remoteId)
                     .mapNotNull { it.id }
-                    .joinToString(",")
+                withSmartListsKept(existing.listIds, manualListIds, serverId).joinToString(",")
             } catch (e: Exception) {
                 AppLogger.e("BookmarkRepository", "Failed to fetch lists for bookmark ${existing.remoteId}: ${e.message}")
                 existing.listIds
@@ -157,6 +159,22 @@ internal class BookmarkContentSync(
             AppLogger.e("BookmarkRepository", "syncSingleBookmark failed for $bookmarkId: ${e.message}", e)
             throw e
         }
+    }
+
+    // Karakeep answers GET /bookmarks/{id}/lists from the rows manual lists write; a smart list is
+    // a query and is never among them. What a bookmark's smart lists are stays whatever the last
+    // sync of each smart list said.
+    private suspend fun withSmartListsKept(
+        localListIds: String,
+        serverListIds: List<String>,
+        serverId: String
+    ): List<String> {
+        val smartListIds = listDao.getListsForServerOnce(serverId)
+            .filter { it.type == com.karakept.api.model.KarakeepList.Type.SMART.value }
+            .map { it.remoteId }
+            .toSet()
+        val keptSmart = localListIds.split(",").map { it.trim() }.filter { it in smartListIds }
+        return (keptSmart + serverListIds.filter { it !in smartListIds }).distinct()
     }
 
     /**

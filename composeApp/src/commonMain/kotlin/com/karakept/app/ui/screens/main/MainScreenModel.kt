@@ -560,8 +560,8 @@ class MainScreenModel(
 
     // RemoteIds of bookmarks on which the user has explicitly performed a list-membership
     // action (add/remove list). Prevents the scroll-triggered action from auto-firing on a
-    // bookmark that is about to leave the list via async reconciliation — the reconcile
-    // involves network calls so the window can be several seconds long.
+    // bookmark that is about to leave the list once the edit is written, which happens on a
+    // coroutine after the tap.
     // Cleared on every full list reload (resetPaginationAndLoad).
     internal val _actedOnBookmarkIds = MutableStateFlow<Set<String>>(emptySet())
     val actedOnBookmarkIds: StateFlow<Set<String>> = _actedOnBookmarkIds

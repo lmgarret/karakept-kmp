@@ -299,13 +299,29 @@ full-bleed and its divider reaches both edges.
   reads the memberships of the whole selection (`selectedBookmarksListIds`), not the rows on
   screen — a list shown as holding all of a partly loaded selection could never be added to the
   rest.
+- Smart lists are listed too, read-only: checked when the bookmark is in one (ALL/SOME/NONE for a
+  selection, like any other row), disabled, labelled "Smart list", and never part of the emitted
+  change. Under `highContrast` the disabled box keeps full contrast, since its tick is the state.
+- Rows are in the navigation drawer's order — `ListHierarchyUtils.buildListHierarchy` over every
+  list, smart and manual together, so a manual list nested under a smart one stays under it.
+  Filtering out smart lists *before* building the hierarchy is what used to orphan such a child
+  to the top level.
+- A nested row is indented inside a `ListItem` whose container is transparent, so the indent is
+  the sheet's colour and part of the tap target. A `ListItem` keeps its own `surface` container
+  otherwise, which differs from a sheet's or a dialog's and shows up as a band in the indent.
 - The state logic is `ListMembershipUtils` (`domain/ListMembershipUtils.kt`), which also breaks a
   change into per-list operations that undo by inverting.
 
 > **Rule:** a bookmark can be in any number of lists. Adding it to one never removes it from
-> another, locally or on screen — there is no "move". Smart lists are not offered for editing, and
-> a list edit never guesses at smart-list membership: `reconcileBookmarkSmartListMembership` asks
-> the server.
+> another, locally or on screen — there is no "move".
+
+> **Rule:** smart-list membership is only ever written by a sync of that smart list
+> (`GET /lists/{id}/bookmarks`, reconciled in `BookmarkSyncPipeline.reconcileListMembership`).
+> Karakeep evaluates a smart list as a query and stores no membership for it, so
+> `GET /bookmarks/{id}/lists` (`List.forBookmark`, read from `bookmarksInLists`) reports manual
+> lists only — never read its answer as a bookmark's smart lists, and never drop one because it is
+> missing there. A list edit flags every smart list (`markSmartListsStale`) and the one opened
+> next is synced (`refreshStaleSmartList`); until then the bookmark stays where it was.
 
 ### Tag editing and filtering
 

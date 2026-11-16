@@ -1,11 +1,10 @@
 package com.karakept.app.ui.screens.main
 
 import com.karakept.api.model.KarakeepList
+import com.karakept.app.data.model.FilterConfig
 import com.karakept.app.data.model.Server
-import com.karakept.app.data.repository.BookmarkActionsRepository
 import com.karakept.app.data.repository.batchAddToList
 import com.karakept.app.data.repository.batchRemoveFromList
-import com.karakept.app.data.repository.flushPendingActions
 import com.karakept.app.domain.ListMembershipChange
 import com.karakept.app.testing.testBookmark
 import io.mockk.coEvery
@@ -39,12 +38,12 @@ class MainScreenModelListMembershipTest {
         KarakeepList(id = "a", name = "Read Later", type = KarakeepList.Type.MANUAL),
         KarakeepList(id = "b", name = "Work", type = KarakeepList.Type.MANUAL)
     )
+    private val smart = KarakeepList(id = "s", name = "Unread", type = KarakeepList.Type.SMART)
 
     @BeforeTest
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
-        mockkStatic(BATCH_KT, SYNC_KT)
-        coEvery { any<BookmarkActionsRepository>().flushPendingActions(any()) } returns Unit
+        mockkStatic(BATCH_KT)
         coEvery { repository.batchAddToList(any(), any()) } returns Unit
         coEvery { repository.batchRemoveFromList(any(), any()) } returns Unit
         every { harness.serverRepository.servers } returns flowOf(listOf(server))
@@ -54,7 +53,7 @@ class MainScreenModelListMembershipTest {
 
     @AfterTest
     fun tearDown() {
-        unmockkStatic(BATCH_KT, SYNC_KT)
+        unmockkStatic(BATCH_KT)
         Dispatchers.resetMain()
     }
 
@@ -108,21 +107,58 @@ class MainScreenModelListMembershipTest {
     }
 
     @Test
-    fun `undo asks the server about smart lists again`() = runTest(testDispatcher) {
-        val bookmark = testBookmark(1L, listIds = "a")
+    fun `editing lists from a smart list view leaves the bookmark in it`() = runTest(testDispatcher) {
+        every { harness.listRepository.lists } returns MutableStateFlow(lists + smart)
+        val bookmark = testBookmark(1L, listIds = "s")
+        val model = harness.createModel()
+        advanceUntilIdle()
+        model.applyFilter(FilterConfig(lists = listOf("s")))
+        advanceUntilIdle()
+
+        model.updateBookmarkLists(listOf(bookmark), ListMembershipChange(added = setOf("a")))
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { repository.batchAddToList(listOf(bookmark), "a") }
+        coVerify(exactly = 0) { repository.batchRemoveFromList(any(), any()) }
+        coVerify(exactly = 0) { harness.bookmarkRepository.syncSingleBookmark(any(), any()) }
+        coVerify(exactly = 0) { harness.bookmarkRepository.syncBookmarksForList(any(), "s", any()) }
+        assertEquals(setOf("s"), model._smartListsNeedingRefresh.value)
+    }
+
+    @Test
+    fun `the smart list an edit was made from is synced when it is next opened`() = runTest(testDispatcher) {
+        every { harness.listRepository.lists } returns MutableStateFlow(lists + smart)
+        val model = harness.createModel()
+        advanceUntilIdle()
+        model.applyFilter(FilterConfig(lists = listOf("s")))
+        advanceUntilIdle()
+        model.updateBookmarkLists(listOf(testBookmark(1L, listIds = "s")), ListMembershipChange(added = setOf("a")))
+        advanceUntilIdle()
+
+        model.applyFilter(FilterConfig(lists = listOf("a")))
+        advanceUntilIdle()
+        model.applyFilter(FilterConfig(lists = listOf("s")))
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { harness.bookmarkRepository.syncBookmarksForList(server, "s", any()) }
+        assertEquals(emptySet(), model._smartListsNeedingRefresh.value)
+    }
+
+    @Test
+    fun `undo flags the smart lists again`() = runTest(testDispatcher) {
+        every { harness.listRepository.lists } returns MutableStateFlow(lists + smart)
         val undo = slot<suspend () -> Unit>()
         coEvery { harness.snackbarManager.showSnackbarWithUndo(any(), capture(undo), any()) } returns Unit
         val model = harness.createModel()
         advanceUntilIdle()
-
-        model.updateBookmarkLists(listOf(bookmark), ListMembershipChange(added = setOf("b")))
+        model.updateBookmarkLists(listOf(testBookmark(1L, listIds = "a")), ListMembershipChange(added = setOf("b")))
         advanceUntilIdle()
-        coVerify(exactly = 1) { harness.bookmarkRepository.reconcileBookmarkSmartListMembership(server, bookmark.localId, any()) }
+        model._smartListsNeedingRefresh.value = emptySet()
 
         undo.captured.invoke()
         advanceUntilIdle()
 
-        coVerify(exactly = 2) { harness.bookmarkRepository.reconcileBookmarkSmartListMembership(server, bookmark.localId, any()) }
+        assertEquals(setOf("s"), model._smartListsNeedingRefresh.value)
     }
 
     @Test
@@ -171,6 +207,5 @@ class MainScreenModelListMembershipTest {
 
     private companion object {
         const val BATCH_KT = "com.karakept.app.data.repository.BookmarkActionsRepositoryBatchKt"
-        const val SYNC_KT = "com.karakept.app.data.repository.BookmarkActionsRepositorySyncKt"
     }
 }
