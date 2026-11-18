@@ -6,8 +6,15 @@
 // library cannot have: the application id, build types, signing, and versioning. It holds
 // no Kotlin — every Android source file, the manifest and the resources live in
 // :composeApp's androidMain, and merge in from the AAR.
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.androidApplication)
+}
+
+// Committed so a build from a release tag (F-Droid's) carries that release's version.
+val releaseVersion = Properties().apply {
+    rootProject.file("version.properties").inputStream().use { load(it) }
 }
 
 android {
@@ -21,8 +28,10 @@ android {
         applicationId = "com.karakept.app"
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
-        versionCode = (project.findProperty("versionCode") as String?)?.toInt() ?: 1
-        versionName = (project.findProperty("versionName") as String?) ?: "1.0"
+        versionCode = ((project.findProperty("versionCode") as String?)
+            ?: releaseVersion.getProperty("versionCode")).toInt()
+        versionName = (project.findProperty("versionName") as String?)
+            ?: releaseVersion.getProperty("versionName")
     }
 
     // AGP otherwise embeds a Google-encrypted dependency report in the APK, which F-Droid rejects.

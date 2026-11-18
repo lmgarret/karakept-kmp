@@ -20,10 +20,15 @@ jobs:
     runs-on: ubuntu-latest
     # Holds ANTHROPIC_API_KEY; the environment only admits main and v* tags.
     environment: release
+    # Pushes the version bump to main.
+    permissions:
+      contents: write
     outputs:
       tag: ${{ steps.version.outputs.tag }}
       name: ${{ steps.version.outputs.name }}
       body: ${{ steps.body.outputs.body }}
+      # The commit every build checks out and the release tags: the bump when one is pushed.
+      sha: ${{ steps.bump.outputs.sha || github.sha }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -107,6 +112,33 @@ jobs:
           echo "tag=v${VERSION}" >> "$GITHUB_OUTPUT"
           echo "name=${VERSION}" >> "$GITHUB_OUTPUT"
 
+      # F-Droid builds from the tag and reads the version from version.properties, so the
+      # tagged commit has to carry it.
+      - name: Commit version bump
+        id: bump
+        if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
+        env:
+          VERSION: ${{ steps.version.outputs.name }}
+        run: |
+          if [[ ! "$VERSION" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+            echo "::error::Release version '$VERSION' is not MAJOR.MINOR.PATCH"
+            exit 1
+          fi
+          CODE=$(( BASH_REMATCH[1] * 10000 + BASH_REMATCH[2] * 100 + BASH_REMATCH[3] ))
+          sed -i -e "s/^versionName=.*/versionName=${VERSION}/" -e "s/^versionCode=.*/versionCode=${CODE}/" version.properties
+          if git diff --quiet -- version.properties; then
+            exit 0
+          fi
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            echo "::error::version.properties at ${GITHUB_REF_NAME} does not say ${VERSION} (${CODE}). Bump it before tagging."
+            exit 1
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "chore: release ${VERSION}" -- version.properties
+          git push origin "HEAD:${GITHUB_REF_NAME}"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
       - name: Compose release body
         id: body
         env:
@@ -168,6 +200,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ needs.resolve-version.outputs.sha }}
           submodules: true
 
       - uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
@@ -197,10 +230,8 @@ jobs:
           KEYSTORE_PATH: ${{ github.workspace }}/karakept-dev.keystore
           KEYSTORE_PASSWORD: ${{ secrets.DEV_KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.DEV_KEY_ALIAS }}
-        run: >
-          ./gradlew :androidApp:assembleRelease
-          -PversionName=${{ needs.resolve-version.outputs.name }}
-          -PversionCode=${{ github.run_number }}
+        # No -PversionName/-PversionCode: the APK takes version.properties, as F-Droid's build does.
+        run: ./gradlew :androidApp:assembleRelease
 
       - name: Rename APK
         run: |
@@ -220,6 +251,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ needs.resolve-version.outputs.sha }}
           submodules: true
 
       - uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
@@ -273,6 +305,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ needs.resolve-version.outputs.sha }}
           submodules: true
 
       - uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
@@ -323,6 +356,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ needs.resolve-version.outputs.sha }}
           submodules: true
 
       - uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
@@ -365,6 +399,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ needs.resolve-version.outputs.sha }}
           submodules: true
 
       - name: Download Linux distributable
@@ -417,6 +452,7 @@ jobs:
         uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3.0.4
         with:
           tag_name: ${{ needs.resolve-version.outputs.tag }}
+          target_commitish: ${{ needs.resolve-version.outputs.sha }}
           name: ${{ needs.resolve-version.outputs.tag }}
           files: |
             apk-release/*.apk

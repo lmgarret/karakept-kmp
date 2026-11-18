@@ -1046,6 +1046,9 @@ CI runs on every PR targeting `main` (`.github/workflows/ci.yml`):
 
 Releases (`.github/workflows/release.yml`):
 - Builds signed Android APK/AAB and desktop packages.
+- The version lives in `version.properties` (`versionCode` = major×10000 + minor×100 + patch). A
+  dispatched release commits the bump to main and tags that commit, because F-Droid builds from the
+  tag and reads its version from that file; a pushed `v*` tag must already carry it.
 - Signing via `KEYSTORE_PATH`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD` environment variables.
 - Changelog generated automatically.
 
