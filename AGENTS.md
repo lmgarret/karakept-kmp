@@ -287,6 +287,58 @@ own width without a subcomposition, and doing that per row in a `LazyColumn` is 
 A row wrapper (`SwipeableBookmarkItem`, `QuickActionBookmarkItem`) takes `flat` so the row goes
 full-bleed and its divider reaches both edges.
 
+### List membership
+
+**`ListMembershipDialog`** (`ui/components/ListMembershipDialog.kt`)
+- A checkbox per manual list, applied together on "Done" as a `ListMembershipChange` (lists to add
+  to, lists to remove from). Takes the list ids of every bookmark being edited, so the same sheet
+  serves one bookmark and a batch selection — a list only some of the selection is in shows as
+  indeterminate and is left alone unless tapped.
+- Pass `isLoading` while the lists or the memberships are still on their way: the sheet shows a
+  `BusyIndicator` and disables "Done", so "loading" never reads as "no lists". A batch caller
+  reads the memberships of the whole selection (`selectedBookmarksListIds`), not the rows on
+  screen — a list shown as holding all of a partly loaded selection could never be added to the
+  rest.
+- Smart lists are listed too, read-only: checked when the bookmark is in one (ALL/SOME/NONE for a
+  selection, like any other row), disabled, labelled "Smart list", and never part of the emitted
+  change. Under `highContrast` the disabled box keeps full contrast, since its tick is the state.
+- Rows are in the navigation drawer's order — `ListHierarchyUtils.buildListHierarchy` over every
+  list, smart and manual together, so a manual list nested under a smart one stays under it.
+  Filtering out smart lists *before* building the hierarchy is what used to orphan such a child
+  to the top level.
+- A nested row is indented inside a `ListItem` whose container is transparent, so the indent is
+  the sheet's colour and part of the tap target. A `ListItem` keeps its own `surface` container
+  otherwise, which differs from a sheet's or a dialog's and shows up as a band in the indent.
+- The state logic is `ListMembershipUtils` (`domain/ListMembershipUtils.kt`), which also breaks a
+  change into per-list operations that undo by inverting.
+
+> **Rule:** a bookmark can be in any number of lists. Adding it to one never removes it from
+> another, locally or on screen — there is no "move".
+
+> **Rule:** smart-list membership has exactly two writers: a sync of that smart list
+> (`GET /lists/{id}/bookmarks`, reconciled in `BookmarkSyncPipeline.reconcileListMembership`), and
+> the membership probe a list edit runs (`SmartListMembershipProbe`, through
+> `BookmarkActionsRepository.reconcileSmartListsAfterEdit`). Karakeep evaluates a smart list as a
+> query and stores no membership for it, so `GET /bookmarks/{id}/lists` (`List.forBookmark`, read
+> from `bookmarksInLists`) reports manual lists only — never read its answer as a bookmark's smart
+> lists, and never drop one because it is missing there.
+
+> **Rule:** the probe writes one smart-list id of one bookmark, and only from a page it can read.
+> It runs after a list edit, once `processPendingActions` has pushed the edit (a bookmark whose
+> list actions are still queued afterwards is not probed), and only against smart lists whose
+> `query` mentions `list:` or `inlist` (`SmartListProbeUtils.canDependOnListMembership` —
+> conservative: a false positive costs one request, a false negative leaves a list wrong). It asks
+> `GET /lists/{smartId}/bookmarks?limit=1&cursor={bookmarkId}_{createdAt}`: the route pages
+> newest first and applies the cursor inclusively, so the first row is the bookmark exactly when
+> the list holds it. Anything it cannot answer — offline, an unpushed edit, a failed request, a
+> first row that sorts before the bookmark, a `createdAt` with a millisecond part (the server
+> stores whole seconds, so it is a local fallback), a batch over `MAX_PROBE_REQUESTS` — is flagged
+> in `smartListsNeedingRefresh` and synced when that list is next opened (`refreshStaleSmartList`);
+> until then the bookmark stays where it was. A result whose bookmark has been edited again since
+> the probe started is dropped (that edit probes for itself), and the write is a compare-and-set
+> (`BookmarkDao.updateListIdsIfUnchanged`). Every list-edit path — sheet, swipe, their undos, batch
+> selection and the reader — goes through it.
+
 ### Tag editing and filtering
 
 **`TagEditorDialog`** (`ui/components/tags/TagEditorDialog.kt`)
@@ -811,7 +863,7 @@ finishes inside one `scroll {}` block.
 ### Menus and bottom sheets
 
 - **`ModalBottomSheet`** + `DropdownMenuItem` → contextual bookmark action menus (see `bookmark/BookmarkActionsMenu.kt`).
-- **`ModalBottomSheet`** + MD3 `ListItem` → list pickers (see `ListPickerDialog.kt`).
+- **`ModalBottomSheet`** + MD3 `ListItem` → list pickers (see `ListMembershipDialog.kt`).
 - **`AlertDialog`** → confirmation and simple edit dialogs.
 - **`DropdownMenu`** anchored to `IconButton` → overflow menus on list items.
 - **`BaseBottomPanel`** (`ui/components/BaseBottomPanel.kt`) → custom overlay bottom panels (matches `ModalBottomSheet` background and animation style).

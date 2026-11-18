@@ -137,6 +137,11 @@ internal interface BookmarkDao {
     )
 
     // Narrow writer for the AI summarize action, which knows nothing about the other metadata.
+    // Compare-and-set: writes only if the row still holds what the caller read, so a list edit or
+    // a sync landing in between is not overwritten. Returns the rows changed (0 or 1).
+    @Query("UPDATE bookmarks SET listIds = :newListIds WHERE localId = :localId AND listIds = :expectedListIds")
+    suspend fun updateListIdsIfUnchanged(localId: Long, expectedListIds: String, newListIds: String): Int
+
     @Query("UPDATE bookmarks SET summary = :summary, summarizationStatus = :status WHERE localId = :localId")
     suspend fun updateSummary(localId: Long, summary: String?, status: String?)
 

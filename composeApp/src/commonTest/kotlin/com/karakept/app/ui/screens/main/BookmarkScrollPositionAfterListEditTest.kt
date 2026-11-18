@@ -25,16 +25,16 @@ import kotlin.test.assertTrue
  * list from page 0, and the viewport jumped to a fixed near-top position wherever the user had
  * been. The fix was a surgical in-memory transform instead of a reload.
  *
- * Neither exists now. The reconcile writes the bookmark's corrected memberships and the list
- * re-reads the pages on screen, so what the user is looking at stays where it is and only the
- * rows that changed change. That the row then leaves the view it no longer belongs to, and stays
- * in the ones it does, is a property of the query and is asserted against real SQLite in
+ * Neither exists now. The action writes the bookmark's memberships and the list re-reads the
+ * pages on screen, so what the user is looking at stays where it is and only the rows that
+ * changed change. That the row then leaves the view it no longer belongs to, and stays in the
+ * ones it does, is a property of the query and is asserted against real SQLite in
  * `BookmarkViewPredicateTest`. What is left here is the part the query does not decide: that the
- * reconcile does not reload the list, and that a bookmark acted on is marked so the
- * scroll-triggered action does not fire on it while the reconcile is in flight.
+ * action does not reload the list, and that a bookmark acted on is marked so the scroll-triggered
+ * action does not fire on it while the edit is in flight.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
-class BookmarkScrollPositionAfterReconcileTest {
+class BookmarkScrollPositionAfterListEditTest {
 
     private val testDispatcher = StandardTestDispatcher()
     private lateinit var harness: MainScreenModelHarness
@@ -52,15 +52,15 @@ class BookmarkScrollPositionAfterReconcileTest {
     }
 
     @Test
-    fun movingABookmarkToAListMarksItActedOn() = runTest(testDispatcher) {
+    fun addingABookmarkToAListMarksItActedOn() = runTest(testDispatcher) {
         val model = harness.createModel()
         advanceUntilIdle()
         val target = bookmark(1L, listIds = "feeds")
 
-        model.moveBookmarkToList(target, "read-later")
+        model.addBookmarkToList(target, "read-later")
 
-        // Marked synchronously: the reconcile involves network calls, so the window in which the
-        // scroll-triggered action could fire on a row about to leave is seconds long.
+        // Marked synchronously: the edit is written from a coroutine, so the window in which the
+        // scroll-triggered action could fire on a row about to leave is open until it runs.
         assertTrue(
             target.remoteId in model.actedOnBookmarkIds.value,
             "the mark has to be set before the coroutine runs, not after it finishes"
@@ -82,7 +82,7 @@ class BookmarkScrollPositionAfterReconcileTest {
     fun switchingViewClearsTheActedOnMarks() = runTest(testDispatcher) {
         val model = harness.createModel()
         advanceUntilIdle()
-        model.moveBookmarkToList(bookmark(1L, listIds = "feeds"), "read-later")
+        model.addBookmarkToList(bookmark(1L, listIds = "feeds"), "read-later")
         assertTrue(model.actedOnBookmarkIds.value.isNotEmpty())
 
         model.applyFilter(FilterConfig(status = FilterStatus.ARCHIVED))
@@ -96,7 +96,7 @@ class BookmarkScrollPositionAfterReconcileTest {
     }
 
     @Test
-    fun aReconcileDoesNotReloadTheListFromTheTop() = runTest(testDispatcher) {
+    fun aListEditDoesNotReloadTheListFromTheTop() = runTest(testDispatcher) {
         val model = harness.createModel()
         val job = launch { model.bookmarkWindow.collect {} }
         advanceUntilIdle()
@@ -106,7 +106,7 @@ class BookmarkScrollPositionAfterReconcileTest {
         advanceUntilIdle()
         harness.clearReads()
 
-        model.moveBookmarkToList(bookmark(1L, listIds = "feeds"), "read-later")
+        model.addBookmarkToList(bookmark(1L, listIds = "feeds"), "read-later")
         advanceUntilIdle()
 
         assertTrue(

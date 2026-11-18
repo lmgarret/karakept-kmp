@@ -70,7 +70,7 @@ class BookmarkMutationIntegrationTest : BaseDockerIntegrationTest() {
     // ──────────────────────────────────────────────────────────
 
     @Test
-    fun testMoveToList_updatesLocalDbImmediately() = runTest(testDispatcher) {
+    fun testAddToList_updatesLocalDbImmediately() = runTest(testDispatcher) {
         assertTrue(isDockerRunning, "Docker should be running")
 
         val bookmarkUrl = "https://example.com/move-to-list-${System.currentTimeMillis()}"
@@ -83,14 +83,14 @@ class BookmarkMutationIntegrationTest : BaseDockerIntegrationTest() {
 
         // Before: bookmark has no list membership
         val before = db.bookmarkDao().getBookmarkByRemoteId(bookmark.remoteId, testServer.id)
-        assertTrue(before?.listIds.isNullOrBlank(), "Bookmark should not be in any list before moveToList")
+        assertTrue(before?.listIds.isNullOrBlank(), "Bookmark should not be in any list before addToList")
 
-        bookmarkActionsRepository.moveToList(bookmark.remoteId, testServer.id, listId)
+        bookmarkActionsRepository.addToList(bookmark.remoteId, testServer.id, listId)
 
         // After: local DB should be updated immediately (optimistic)
         val afterLocal = db.bookmarkDao().getBookmarkByRemoteId(bookmark.remoteId, testServer.id)
         val localListIds = afterLocal?.listIds?.split(",")?.map { it.trim() }?.filter { it.isNotBlank() } ?: emptyList()
-        assertTrue(localListIds.contains(listId), "Local DB should contain listId immediately after moveToList")
+        assertTrue(localListIds.contains(listId), "Local DB should contain listId immediately after addToList")
 
         // Wait for auto-sync to push to server
         withContext(Dispatchers.Default) { kotlinx.coroutines.delay(3000) }

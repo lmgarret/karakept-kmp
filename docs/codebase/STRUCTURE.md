@@ -69,7 +69,7 @@ karakept-kmp/
 
 **composeApp/src/commonMain/kotlin/com/karakept/app/ui/components/:**
 - Purpose: Reusable, single-purpose composable building blocks
-- Contains: generic components at the root (BaseBottomPanel, EinkAware, ListPickerDialog, FilterBottomPanel) and feature subpackages: `tags/` (TagChip, BookmarkTagsDisplay, TagEditorDialog), `bookmark/` (BookmarkActionsMenu, BookmarkCardLayout, BookmarkListLayout, row items and badges), `highlight/` (HighlightCard and friends), `reader/` (HtmlRenderer, HtmlContent, HighlightTextToolbar, ViewerModeToggle)
+- Contains: generic components at the root (BaseBottomPanel, EinkAware, ListMembershipDialog, FilterBottomPanel) and feature subpackages: `tags/` (TagChip, BookmarkTagsDisplay, TagEditorDialog), `bookmark/` (BookmarkActionsMenu, BookmarkCardLayout, BookmarkListLayout, row items and badges), `highlight/` (HighlightCard and friends), `reader/` (HtmlRenderer, HtmlContent, HighlightTextToolbar, ViewerModeToggle)
 - Key files:
   - `tags/TagChip.kt` - Single tag display (canonical design: secondaryContainer, shapes.small, 2dp elevation)
   - `tags/BookmarkTagsDisplay.kt` - Renders comma-separated tag string as FlowRow
@@ -120,7 +120,7 @@ karakept-kmp/
 - Purpose: Business logic, domain abstractions, centralized action handling
 - Contains:
   - `action/BookmarkActionController.kt` - Centralized action execution with undo support (5-second window, undo cache)
-  - `action/BookmarkActionEvent.kt` - Sealed class hierarchy of all bookmarkactions (Archive, Delete, ToggleFavorite, UpdateTags, MoveToList, etc.)
+  - `action/BookmarkActionEvent.kt` - Sealed class hierarchy of all bookmarkactions (Archive, Delete, ToggleFavorite, UpdateTags, AddToList, etc.)
   - `action/ActionSnackbarManager.kt` - Event emitter for snackbar display
   - `BookmarkFilterUtils.kt` - Predicate-based filtering (tags, lists, archived, favorited, search)
   - `ListHierarchyUtils.kt` - List ordering (parents before children, alphabetical at each level), collapsible tree helpers

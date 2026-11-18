@@ -43,7 +43,7 @@ internal fun ViewerInitialContent(
                 onBackClick = onBack,
                 onMenuToggle = {},
                 onAppearanceClick = {},
-                onMoveToListClick = {},
+                onEditListsClick = {},
                 onEditTagsClick = {},
                 onRefreshClick = {},
                 onDeleteClick = {},

@@ -209,7 +209,7 @@ fun MainScreenScaffoldContent(
                 onBatchFavourite = { screenModel.batchFavourite() },
                 onBatchUnfavourite = { screenModel.batchUnfavourite() },
                 onBatchSetTags = onShowBatchTagEditor,
-                onBatchMoveToList = onShowBatchListPicker,
+                onBatchEditLists = onShowBatchListPicker,
                 onBatchDelete = onShowBatchDeleteConfirm,
                 aiCapabilities = aiCapabilities,
                 selectedViaSelectAll = selectedViaSelectAll,
@@ -324,13 +324,7 @@ fun MainScreenScaffoldContent(
                             }
                         }
                         is BookmarkAction.Select -> screenModel.enterSelectionMode(bookmark)
-                        is BookmarkAction.MoveToList -> {
-                            screenModel.moveBookmarkToList(bookmark, action.listId)
-                            val listName = contextMenuLists.firstOrNull { it.id == action.listId }?.name ?: "list"
-                            scope.undoableAction(snackbarManager, "Moved to '$listName'") {
-                                screenModel.restoreAndRemoveBookmarkFromList(bookmark, action.listId)
-                            }
-                        }
+                        is BookmarkAction.UpdateLists -> screenModel.updateBookmarkLists(listOf(bookmark), action.change)
                         is BookmarkAction.UpdateTags -> {
                             val oldTags = bookmark.tags.split(",").filter { it.isNotBlank() }
                             screenModel.updateBookmarkTags(bookmark, action.tags)

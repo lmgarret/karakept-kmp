@@ -6,41 +6,37 @@ import com.karakept.app.data.local.dao.AssetDao
 import com.karakept.app.data.local.dao.BookmarkDao
 import com.karakept.app.data.local.dao.ListDao
 import com.karakept.app.data.local.dao.PendingActionDao
-import com.karakept.app.data.local.entity.BookmarkEntity
-import com.karakept.app.data.local.entity.PendingActionEntity
-import com.karakept.app.data.local.entity.PendingActionType
+import com.karakept.app.data.local.entity.ListEntity
 import com.karakept.app.data.model.Server
+import com.karakept.app.data.model.SyncStrategy
 import com.karakept.app.data.remote.RemoteDataSource
+import com.karakept.app.testing.testBookmarkEntity
 import com.karakept.app.utils.TestAppDispatchers
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertTrue
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.runTest
 
 /**
- * Unit tests for smart-list membership reconciliation after quick-action mutations.
+ * Smart-list membership is never read from `GET /bookmarks/{id}/lists`.
  *
- * Covers the LIST-02 bug scenario:
- *   - Bookmark starts in smart list A (RSS), not in manual list B
- *   - User adds bookmark to list B  →  server excludes it from list A
- *   - User removes bookmark from list B  →  server includes it back in list A
- *
- * Tests verify both the DB merge logic in [reconcileBookmarkSmartListMembership]
- * and that [processPendingActions] (flush) sends the action to the server before
- * the GET /bookmarks/{id}/lists call.
+ * Karakeep answers that route from its `bookmarksInLists` join table (`List.forBookmark`), which
+ * only manual lists write to: a smart list is a saved query, evaluated when its own bookmarks are
+ * asked for (`SmartList.getBookmarkIds`), and holds no rows there. So the route reports a
+ * bookmark's manual lists and never its smart ones — reading it as the whole answer is what used
+ * to drop a bookmark out of the smart list it was being looked at in. Only a sync of the smart
+ * list itself (`GET /lists/{id}/bookmarks`) says what is in it.
  */
 class SmartListReconciliationTest {
 
     private val testDispatcher = StandardTestDispatcher()
     private val testAppDispatchers = TestAppDispatchers(testDispatcher)
-
-    // ---- Shared fixtures ----
 
     private val testServer = Server(
         id = "server-1",
@@ -53,26 +49,24 @@ class SmartListReconciliationTest {
     private val assetDao: AssetDao = mockk(relaxed = true)
     private val remoteDataSource: RemoteDataSource = mockk(relaxed = true)
     private val pendingActionDao: PendingActionDao = mockk(relaxed = true)
-    private val settingsRepository: SettingsRepository = mockk()
+    private val settingsRepository: SettingsRepository = mockk(relaxed = true)
     private val serverRepository: ServerRepository = mockk()
     private val highlightRepository: HighlightRepository = mockk(relaxed = true)
     private val imageCacheManager: ImageCacheManager = mockk(relaxed = true)
     private val listDao: ListDao = mockk(relaxed = true)
 
-    private val actionsRepository = BookmarkActionsRepository(
-        bookmarkDao = bookmarkDao,
-        pendingActionDao = pendingActionDao,
-        remoteDataSource = remoteDataSource,
-        serverRepository = serverRepository,
-        settingsRepository = settingsRepository,
-        appDispatchers = testAppDispatchers
-    )
-
     private val bookmarkRepository = BookmarkRepository(
         bookmarkDao = bookmarkDao,
         assetDao = assetDao,
         remoteDataSource = remoteDataSource,
-        bookmarkActionsRepository = actionsRepository,
+        bookmarkActionsRepository = BookmarkActionsRepository(
+            bookmarkDao = bookmarkDao,
+            pendingActionDao = pendingActionDao,
+            remoteDataSource = remoteDataSource,
+            serverRepository = serverRepository,
+            settingsRepository = settingsRepository,
+            appDispatchers = testAppDispatchers
+        ),
         settingsRepository = settingsRepository,
         serverRepository = serverRepository,
         highlightRepository = highlightRepository,
@@ -82,299 +76,89 @@ class SmartListReconciliationTest {
     )
 
     init {
-        coEvery { serverRepository.servers } returns flowOf(listOf(testServer))
+        every { serverRepository.servers } returns flowOf(listOf(testServer))
+        every { settingsRepository.contentSyncStrategy } returns flowOf(SyncStrategy.NEVER)
+        every { settingsRepository.preferFullPageHtml } returns flowOf(false)
+        coEvery { remoteDataSource.fetchBookmark(testServer, any(), any()) } returns
+            com.karakept.api.model.Bookmark(id = "orig-1", title = "Bookmark")
+        coEvery { listDao.getListsForServerOnce(testServer.id) } returns listOf(
+            listEntity("smartA", type = "smart"),
+            listEntity("manualB"),
+            listEntity("manualC"),
+        )
     }
 
-    // ---- Helpers ----
-
-    private fun bookmarkEntity(
-        localId: Long = 1L,
-        listIds: String = ""
-    ) = BookmarkEntity(
-        localId = localId,
-        remoteId = "orig-$localId",
+    private fun listEntity(id: String, type: String = "manual") = ListEntity(
+        remoteId = id,
         serverId = testServer.id,
-        url = "https://example.com/$localId",
-        title = "Bookmark $localId",
-        content = null,
-        imageUrl = null,
-        bannerImageAssetId = null,
-        screenshotAssetId = null,
+        name = "List $id",
+        icon = null,
+        parentId = null,
         description = null,
-        createdAt = 1000L,
-        isArchived = false,
-        isStarred = false,
-        listIds = listIds
+        type = type,
+        query = null,
+        updatedAt = 0L
     )
 
-    private fun karakeepList(id: String, type: KarakeepList.Type = KarakeepList.Type.SMART) =
-        KarakeepList(id = id, name = "List $id", type = type)
+    private fun manualList(id: String) = KarakeepList(id = id, name = "List $id", type = KarakeepList.Type.MANUAL)
 
-    // ---- reconcileBookmarkSmartListMembership tests ----
+    private suspend fun refreshAndCaptureListIds(localListIds: String, serverLists: List<KarakeepList>): Set<String> {
+        val entity = testBookmarkEntity(localId = 1L, remoteId = "orig-1", serverId = testServer.id, listIds = localListIds)
+        coEvery { bookmarkDao.getBookmarkByRemoteId("orig-1", testServer.id) } returns entity
+        coEvery { remoteDataSource.fetchListsForBookmark(testServer, "orig-1") } returns serverLists
 
-    /**
-     * Core scenario: after removing from manual list B, bookmark should appear in smart list A.
-     *
-     * DB state (after optimistic remove): listIds = "" (empty — listB was removed, listA never local)
-     * Server returns: [listA]  (smart list A now includes bookmark again)
-     * Expected DB update: listIds = "listA"
-     */
-    @Test
-    fun removeFromManualList_bookmarkAppearsInSmartList() = runTest(testDispatcher) {
-        val entity = bookmarkEntity(localId = 1L, listIds = "")
-        coEvery { bookmarkDao.getBookmarkById(1L) } returns entity
-        coEvery { remoteDataSource.fetchListsForBookmark(testServer, "orig-1") } returns
-            listOf(karakeepList("listA"))
+        bookmarkRepository.syncSingleBookmark("orig-1", testServer.id)
 
-        val smartListIds = setOf("listA")
-        bookmarkRepository.reconcileBookmarkSmartListMembership(testServer, 1L, smartListIds)
-
+        val listIds = slot<String>()
         coVerify {
             bookmarkDao.updateBookmarkMetadata(
-                localId = 1L,
-                title = entity.title,
-                url = entity.url,
-                description = entity.description,
-                imageUrl = entity.imageUrl,
-                bannerImageAssetId = entity.bannerImageAssetId,
-                screenshotAssetId = entity.screenshotAssetId,
-                tags = entity.tags,
-                listIds = "listA",
-                isStarred = entity.isStarred,
-                isArchived = entity.isArchived,
-                isRead = entity.isRead,
-                readingTimeMinutes = entity.readingTimeMinutes,
-                modifiedAt = any(),
-                crawlStatus = any(),
-                crawledAt = any(),
-                summary = any(),
-                summarizationStatus = any()
+                localId = 1L, title = any(), url = any(), description = any(), imageUrl = any(),
+                bannerImageAssetId = any(), screenshotAssetId = any(), tags = any(),
+                listIds = capture(listIds), isStarred = any(), isArchived = any(), isRead = any(),
+                readingTimeMinutes = any(), modifiedAt = any(), crawlStatus = any(), crawledAt = any(),
+                summary = any(), summarizationStatus = any()
             )
         }
+        return listIds.captured.split(",").filter { it.isNotEmpty() }.toSet()
     }
 
-    /**
-     * Adding to manual list B: bookmark leaves smart list A (server excludes it).
-     *
-     * DB state (after optimistic add): listIds = "listA,listB"
-     * Server returns: [] (smart list A excludes bookmark because it's in list B)
-     * Expected DB update: listIds = "listB" (manual lists preserved, smart list A removed)
-     */
     @Test
-    fun addToManualList_bookmarkLeavesSmartList() = runTest(testDispatcher) {
-        val entity = bookmarkEntity(localId = 2L, listIds = "listA,listB")
-        coEvery { bookmarkDao.getBookmarkById(2L) } returns entity
-        coEvery { remoteDataSource.fetchListsForBookmark(testServer, "orig-2") } returns emptyList()
+    fun `refreshing a bookmark keeps the smart lists it is in`() = runTest(testDispatcher) {
+        // What Karakeep returns for a bookmark in smartA and manualB: manualB alone.
+        val saved = refreshAndCaptureListIds("smartA,manualB", listOf(manualList("manualB")))
 
-        val smartListIds = setOf("listA")
-        bookmarkRepository.reconcileBookmarkSmartListMembership(testServer, 2L, smartListIds)
+        assertEquals(setOf("smartA", "manualB"), saved)
+    }
+
+    @Test
+    fun `refreshing a bookmark takes its manual lists from the server`() = runTest(testDispatcher) {
+        val saved = refreshAndCaptureListIds("smartA,manualB", listOf(manualList("manualC")))
+
+        assertEquals(setOf("smartA", "manualC"), saved)
+    }
+
+    @Test
+    fun `refreshing a bookmark never adds a smart list it was not in`() = runTest(testDispatcher) {
+        val saved = refreshAndCaptureListIds("manualB", listOf(manualList("manualB")))
+
+        assertEquals(setOf("manualB"), saved)
+    }
+
+    @Test
+    fun `a failed lists request keeps every membership`() = runTest(testDispatcher) {
+        val entity = testBookmarkEntity(localId = 1L, remoteId = "orig-1", serverId = testServer.id, listIds = "smartA,manualB")
+        coEvery { bookmarkDao.getBookmarkByRemoteId("orig-1", testServer.id) } returns entity
+        coEvery { remoteDataSource.fetchListsForBookmark(testServer, "orig-1") } throws RuntimeException("offline")
+
+        bookmarkRepository.syncSingleBookmark("orig-1", testServer.id)
 
         coVerify {
             bookmarkDao.updateBookmarkMetadata(
-                localId = 2L,
-                title = any(),
-                url = any(),
-                description = any(),
-                imageUrl = any(),
-                bannerImageAssetId = any(),
-                screenshotAssetId = any(),
-                tags = any(),
-                listIds = "listB",
-                isStarred = any(),
-                isArchived = any(),
-                isRead = any(),
-                readingTimeMinutes = any(),
-                modifiedAt = any(),
-                crawlStatus = any(),
-                crawledAt = any(),
-                summary = any(),
-                summarizationStatus = any()
-            )
-        }
-    }
-
-    /**
-     * Manual list membership is preserved even when the server doesn't return it.
-     *
-     * DB state: listIds = "listC" (manual, not a smart list)
-     * Server returns: [listA]
-     * Expected: listIds = "listA,listC" — manual list C kept, smart list A added
-     */
-    @Test
-    fun manualListMembershipPreservedDuringReconciliation() = runTest(testDispatcher) {
-        val entity = bookmarkEntity(localId = 3L, listIds = "listC")
-        coEvery { bookmarkDao.getBookmarkById(3L) } returns entity
-        coEvery { remoteDataSource.fetchListsForBookmark(testServer, "orig-3") } returns
-            listOf(karakeepList("listA"))
-
-        val smartListIds = setOf("listA") // listC is manual, not in smartListIds
-
-        bookmarkRepository.reconcileBookmarkSmartListMembership(testServer, 3L, smartListIds)
-
-        val listIdsSlot = slot<String>()
-        coVerify {
-            bookmarkDao.updateBookmarkMetadata(
-                localId = 3L,
-                title = any(),
-                url = any(),
-                description = any(),
-                imageUrl = any(),
-                bannerImageAssetId = any(),
-                screenshotAssetId = any(),
-                tags = any(),
-                listIds = capture(listIdsSlot),
-                isStarred = any(),
-                isArchived = any(),
-                isRead = any(),
-                readingTimeMinutes = any(),
-                modifiedAt = any(),
-                crawlStatus = any(),
-                crawledAt = any(),
-                summary = any(),
-                summarizationStatus = any()
-            )
-        }
-        // Both listA (from server) and listC (manual, preserved) should be present
-        val savedIds = listIdsSlot.captured.split(",").toSet()
-        assertTrue("listA" in savedIds, "Smart list A should be in saved listIds (got: ${listIdsSlot.captured})")
-        assertTrue("listC" in savedIds, "Manual list C should be preserved (got: ${listIdsSlot.captured})")
-    }
-
-    /**
-     * No DB write occurs when the membership is already correct.
-     */
-    @Test
-    fun noDbWriteWhenMembershipUnchanged() = runTest(testDispatcher) {
-        val entity = bookmarkEntity(localId = 4L, listIds = "listA")
-        coEvery { bookmarkDao.getBookmarkById(4L) } returns entity
-        coEvery { remoteDataSource.fetchListsForBookmark(testServer, "orig-4") } returns
-            listOf(karakeepList("listA"))
-
-        val smartListIds = setOf("listA")
-        bookmarkRepository.reconcileBookmarkSmartListMembership(testServer, 4L, smartListIds)
-
-        coVerify(exactly = 0) { bookmarkDao.updateBookmarkMetadata(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) }
-    }
-
-    /**
-     * Stale-server scenario: server returns empty smart list membership.
-     * reconcileBookmarkSmartListMembership returns false to signal staleness,
-     * so the caller can schedule a deferred smart list sync.
-     */
-    @Test
-    fun staleServerResponse_returnsFalseForDeferredSync() = runTest(testDispatcher) {
-        val entity = bookmarkEntity(localId = 10L, listIds = "")
-        coEvery { bookmarkDao.getBookmarkById(10L) } returns entity
-        coEvery { remoteDataSource.fetchListsForBookmark(testServer, "orig-10") } returns emptyList()
-
-        val smartListIds = setOf("listA")
-        val result = bookmarkRepository.reconcileBookmarkSmartListMembership(testServer, 10L, smartListIds)
-
-        // No DB write (server returned stale empty data)
-        coVerify(exactly = 0) {
-            bookmarkDao.updateBookmarkMetadata(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
-        }
-        // Returns false → caller should mark smart lists for deferred refresh
-        assertEquals(false, result)
-    }
-
-    /**
-     * When server returns fresh smart list data, returns true.
-     */
-    @Test
-    fun freshServerResponse_returnsTrue() = runTest(testDispatcher) {
-        val entity = bookmarkEntity(localId = 11L, listIds = "")
-        coEvery { bookmarkDao.getBookmarkById(11L) } returns entity
-        coEvery { remoteDataSource.fetchListsForBookmark(testServer, "orig-11") } returns
-            listOf(karakeepList("listA"))
-
-        val smartListIds = setOf("listA")
-        val result = bookmarkRepository.reconcileBookmarkSmartListMembership(testServer, 11L, smartListIds)
-
-        assertEquals(true, result)
-        // DB was updated with listA
-        coVerify {
-            bookmarkDao.updateBookmarkMetadata(
-                localId = 11L,
-                title = any(),
-                url = any(),
-                description = any(),
-                imageUrl = any(),
-                bannerImageAssetId = any(),
-                screenshotAssetId = any(),
-                tags = any(),
-                listIds = "listA",
-                isStarred = any(),
-                isArchived = any(),
-                isRead = any(),
-                readingTimeMinutes = any(),
-                modifiedAt = any(),
-                crawlStatus = any(),
-                crawledAt = any(),
-                summary = any(),
-                summarizationStatus = any()
-            )
-        }
-    }
-
-    // ---- flushPendingActions + reconcile sequence test ----
-
-    /**
-     * Key ordering guarantee: the REMOVE_FROM_LIST action is sent to the server
-     * BEFORE GET /bookmarks/{id}/lists is called.
-     *
-     * Without the flush, GET could return stale smart-list membership.
-     */
-    @Test
-    fun flushSendsActionBeforeGetListsIsCalled() = runTest(testDispatcher) {
-        val bookmark = bookmarkEntity(localId = 5L, listIds = "")
-
-        // Pending REMOVE_FROM_LIST action for listB
-        val pendingAction = PendingActionEntity(
-            id = 1L,
-            bookmarkRemoteId = "orig-5",
-            serverId = testServer.id,
-            actionType = PendingActionType.REMOVE_FROM_LIST,
-            actionData = """{"listId":"listB"}""",
-            createdAt = 1000L
-        )
-
-        coEvery { pendingActionDao.getPendingActionsList(testServer.id) } returns listOf(pendingAction)
-        coEvery { pendingActionDao.getProcessableActions(testServer.id, any()) } returns listOf(pendingAction)
-        coEvery { bookmarkDao.getBookmarkByRemoteId("orig-5", testServer.id) } returns bookmark
-        coEvery { bookmarkDao.getBookmarkById(5L) } returns bookmark
-        coEvery { remoteDataSource.fetchListsForBookmark(testServer, "orig-5") } returns
-            listOf(karakeepList("listA"))
-
-        // Simulate what reconcileBookmarkLists does: flush first, then GET /bookmarks/{id}/lists
-        actionsRepository.flushPendingActions(testServer)
-        bookmarkRepository.reconcileBookmarkSmartListMembership(testServer, 5L, setOf("listA"))
-
-        // Verify the action was sent to the server (meaning flush ran before GET)
-        coVerify(exactly = 1) { remoteDataSource.removeBookmarkFromList(testServer, "listB", "orig-5") }
-        coVerify(exactly = 1) { remoteDataSource.fetchListsForBookmark(testServer, "orig-5") }
-
-        // The DB should have been updated with listA
-        coVerify {
-            bookmarkDao.updateBookmarkMetadata(
-                localId = 5L,
-                title = any(),
-                url = any(),
-                description = any(),
-                imageUrl = any(),
-                bannerImageAssetId = any(),
-                screenshotAssetId = any(),
-                tags = any(),
-                listIds = "listA",
-                isStarred = any(),
-                isArchived = any(),
-                isRead = any(),
-                readingTimeMinutes = any(),
-                modifiedAt = any(),
-                crawlStatus = any(),
-                crawledAt = any(),
-                summary = any(),
-                summarizationStatus = any()
+                localId = 1L, title = any(), url = any(), description = any(), imageUrl = any(),
+                bannerImageAssetId = any(), screenshotAssetId = any(), tags = any(),
+                listIds = "smartA,manualB", isStarred = any(), isArchived = any(), isRead = any(),
+                readingTimeMinutes = any(), modifiedAt = any(), crawlStatus = any(), crawledAt = any(),
+                summary = any(), summarizationStatus = any()
             )
         }
     }

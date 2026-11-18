@@ -114,6 +114,22 @@ the DB. Instead `BookmarkSyncPipeline` commits each page as it arrives:
 5. User can undo: BookmarkActionController reads from undo cache and reverses operation
 6. Pending actions queued in PendingActionDao for sync when online
 
+**Smart-List Membership After a List Edit:**
+
+1. A list edit (Edit Lists sheet, swipe, their undos, batch selection, the reader) writes the
+   manual list id locally and queues the action, as any other action.
+2. The ScreenModel then calls `BookmarkActionsRepository.reconcileSmartListsAfterEdit`, which runs
+   `SmartListMembershipProbe` on the repository's own scope (leaving the screen does not cancel it).
+3. The probe keeps the smart lists whose query mentions `list:` or `inlist`, pushes the pending
+   actions (`processPendingActions`), and for each edited bookmark whose list actions all reached
+   the server asks `GET /lists/{smartId}/bookmarks?limit=1&cursor={id}_{createdAt}`. Karakeep has
+   no membership route for a smart list; the inclusive, newest-first cursor makes the first row the
+   bookmark exactly when the list holds it.
+4. Each answer adds or removes that one smart-list id (a compare-and-set on `listIds`), unless the
+   bookmark was edited again meanwhile. Anything unanswered is flagged in
+   `smartListsNeedingRefresh`; `MainScreenModel.refreshStaleSmartList` syncs a flagged list the
+   next time it is opened.
+
 **Tag Filtering Flow:**
 
 1. MainScreenModel.currentFilter updated with tag filter
@@ -139,7 +155,7 @@ the DB. Instead `BookmarkSyncPipeline` commits each page as it arrives:
 
 **BookmarkActionEvent (Sealed Class):**
 - Purpose: Type-safe representation of all possible bookmark mutations
-- Examples: Archive, Unarchive, MarkRead, MarkUnread, ToggleFavorite, Delete, UpdateTags, MoveToList, RemoveFromList
+- Examples: Archive, Unarchive, MarkRead, MarkUnread, ToggleFavorite, Delete, UpdateTags, AddToList, RemoveFromList
 - Location: `core/data/src/commonMain/kotlin/com/karakept/app/domain/action/BookmarkActionEvent.kt`
 - Pattern: Sealed class hierarchy with discriminator field `requiresUndo` to determine if undo support applies
 
@@ -246,7 +262,7 @@ current view, rebuilt on every write, to answer these.
   - Render full bookmark details with hero image, HTML content, highlights
   - Display and manage highlights (create, delete, sync)
   - Show reader mode (with font/theme/size customization)
-  - Handle tag editing and bookmark actions (favorite, archive, move to list)
+  - Handle tag editing and bookmark actions (favorite, archive, edit lists)
 
 ## Error Handling
 

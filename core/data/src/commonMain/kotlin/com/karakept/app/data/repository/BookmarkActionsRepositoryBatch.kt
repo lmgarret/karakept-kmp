@@ -152,9 +152,10 @@ suspend fun BookmarkActionsRepository.batchUpdateTags(bookmarks: List<Bookmark>,
 /**
  * Add a list of bookmarks to a list without showing individual snackbars.
  */
-suspend fun BookmarkActionsRepository.batchMoveToList(bookmarks: List<Bookmark>, listId: String) {
+suspend fun BookmarkActionsRepository.batchAddToList(bookmarks: List<Bookmark>, listId: String) {
     withContext(appDispatchers.io) {
         bookmarks.forEach { bookmark ->
+            smartListProbe.noteListEdit(bookmark.serverId, bookmark.remoteId)
             val current = bookmarkDao.getBookmarkByRemoteId(bookmark.remoteId, bookmark.serverId)
             current?.let {
                 val currentListIds = it.listIds.split(",").map { id -> id.trim() }.filter { id -> id.isNotBlank() }
@@ -162,10 +163,37 @@ suspend fun BookmarkActionsRepository.batchMoveToList(bookmarks: List<Bookmark>,
                     bookmarkDao.insertBookmark(it.copy(listIds = (currentListIds + listId).joinToString(",")))
                 }
             }
+            dedupListMembershipActions(bookmark.remoteId, bookmark.serverId, listId)
             queueAction(
                 bookmarkRemoteId = bookmark.remoteId,
                 serverId = bookmark.serverId,
                 actionType = PendingActionType.MOVE_TO_LIST,
+                actionData = jsonSerializer.encodeToString(mapOf("listId" to listId))
+            )
+        }
+        bookmarks.firstOrNull()?.serverId?.let { triggerAutoSync(it) }
+    }
+}
+
+/**
+ * Remove a list of bookmarks from a list without showing individual snackbars.
+ */
+suspend fun BookmarkActionsRepository.batchRemoveFromList(bookmarks: List<Bookmark>, listId: String) {
+    withContext(appDispatchers.io) {
+        bookmarks.forEach { bookmark ->
+            smartListProbe.noteListEdit(bookmark.serverId, bookmark.remoteId)
+            val current = bookmarkDao.getBookmarkByRemoteId(bookmark.remoteId, bookmark.serverId)
+            current?.let {
+                val currentListIds = it.listIds.split(",").map { id -> id.trim() }.filter { id -> id.isNotBlank() }
+                if (currentListIds.contains(listId)) {
+                    bookmarkDao.insertBookmark(it.copy(listIds = (currentListIds - listId).joinToString(",")))
+                }
+            }
+            dedupListMembershipActions(bookmark.remoteId, bookmark.serverId, listId)
+            queueAction(
+                bookmarkRemoteId = bookmark.remoteId,
+                serverId = bookmark.serverId,
+                actionType = PendingActionType.REMOVE_FROM_LIST,
                 actionData = jsonSerializer.encodeToString(mapOf("listId" to listId))
             )
         }

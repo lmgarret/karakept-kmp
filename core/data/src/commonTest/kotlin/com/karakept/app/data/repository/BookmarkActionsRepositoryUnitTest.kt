@@ -42,16 +42,16 @@ class BookmarkActionsRepositoryUnitTest : BaseRepositoryTest() {
     )
 
     // ──────────────────────────────────────────────────────────
-    // moveToList
+    // addToList
     // ──────────────────────────────────────────────────────────
 
     @Test
-    fun moveToList_updatesLocalDbWithNewListId() = runTest(testDispatcher) {
+    fun addToList_updatesLocalDbWithNewListId() = runTest(testDispatcher) {
         val bookmark = testBookmarkEntity(listIds = "")
         coEvery { bookmarkDao.getBookmarkByRemoteId(bookmark.remoteId, bookmark.serverId) } returns bookmark
         coEvery { settingsRepository.offlineMode } returns flowOf(true) // skip auto-sync
 
-        repository.moveToList(bookmark.remoteId, bookmark.serverId, "list-99")
+        repository.addToList(bookmark.remoteId, bookmark.serverId, "list-99")
 
         val savedSlot = slot<BookmarkEntity>()
         coVerify { bookmarkDao.insertBookmark(capture(savedSlot)) }
@@ -59,12 +59,12 @@ class BookmarkActionsRepositoryUnitTest : BaseRepositoryTest() {
     }
 
     @Test
-    fun moveToList_appendsListIdToExistingListIds() = runTest(testDispatcher) {
+    fun addToList_appendsListIdToExistingListIds() = runTest(testDispatcher) {
         val bookmark = testBookmarkEntity(listIds = "list-1,list-2")
         coEvery { bookmarkDao.getBookmarkByRemoteId(bookmark.remoteId, bookmark.serverId) } returns bookmark
         coEvery { settingsRepository.offlineMode } returns flowOf(true)
 
-        repository.moveToList(bookmark.remoteId, bookmark.serverId, "list-3")
+        repository.addToList(bookmark.remoteId, bookmark.serverId, "list-3")
 
         val savedSlot = slot<BookmarkEntity>()
         coVerify { bookmarkDao.insertBookmark(capture(savedSlot)) }
@@ -73,43 +73,40 @@ class BookmarkActionsRepositoryUnitTest : BaseRepositoryTest() {
     }
 
     @Test
-    fun moveToList_stripsSmartListMembershipOptimistically() = runTest(testDispatcher) {
-        // Bookmark is in a smart list ("all-feeds") and a manual list ("keep-manual").
+    fun addToList_keepsEveryListTheBookmarkIsAlreadyIn() = runTest(testDispatcher) {
+        // "all-feeds" is a smart list. Whether the addition takes the bookmark out of it is the
+        // server's call, made by the reconcile that follows — never an optimistic guess here.
         val bookmark = testBookmarkEntity(listIds = "all-feeds,keep-manual")
         coEvery { bookmarkDao.getBookmarkByRemoteId(bookmark.remoteId, bookmark.serverId) } returns bookmark
         coEvery { settingsRepository.offlineMode } returns flowOf(true)
 
-        repository.moveToList(
-            bookmark.remoteId, bookmark.serverId, "read-later",
-            smartListIds = setOf("all-feeds")
-        )
+        repository.addToList(bookmark.remoteId, bookmark.serverId, "read-later")
 
         val savedSlot = slot<BookmarkEntity>()
         coVerify { bookmarkDao.insertBookmark(capture(savedSlot)) }
         val ids = savedSlot.captured.listIds.split(",").map { it.trim() }.filter { it.isNotBlank() }.toSet()
-        // Smart list dropped, manual list kept, target list added.
-        assertEquals(setOf("keep-manual", "read-later"), ids)
+        assertEquals(setOf("all-feeds", "keep-manual", "read-later"), ids)
     }
 
     @Test
-    fun moveToList_doesNotDuplicateExistingListId() = runTest(testDispatcher) {
+    fun addToList_doesNotDuplicateExistingListId() = runTest(testDispatcher) {
         val bookmark = testBookmarkEntity(listIds = "list-1")
         coEvery { bookmarkDao.getBookmarkByRemoteId(bookmark.remoteId, bookmark.serverId) } returns bookmark
         coEvery { settingsRepository.offlineMode } returns flowOf(true)
 
-        repository.moveToList(bookmark.remoteId, bookmark.serverId, "list-1")
+        repository.addToList(bookmark.remoteId, bookmark.serverId, "list-1")
 
         // insertBookmark should NOT have been called since the listId already exists
         coVerify(exactly = 0) { bookmarkDao.insertBookmark(any()) }
     }
 
     @Test
-    fun moveToList_queuesPendingAction() = runTest(testDispatcher) {
+    fun addToList_queuesPendingAction() = runTest(testDispatcher) {
         val bookmark = testBookmarkEntity(listIds = "")
         coEvery { bookmarkDao.getBookmarkByRemoteId(bookmark.remoteId, bookmark.serverId) } returns bookmark
         coEvery { settingsRepository.offlineMode } returns flowOf(true)
 
-        repository.moveToList(bookmark.remoteId, bookmark.serverId, "list-99")
+        repository.addToList(bookmark.remoteId, bookmark.serverId, "list-99")
 
         val actionSlot = slot<PendingActionEntity>()
         coVerify { pendingActionDao.insertAction(capture(actionSlot)) }

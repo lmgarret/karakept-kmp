@@ -116,7 +116,7 @@ class BookmarkRepository internal constructor(
     }
 
     private val contentSync = BookmarkContentSync(
-        bookmarkDao, remoteDataSource, settingsRepository, serverRepository, imageCacheManager, assetCache
+        bookmarkDao, listDao, remoteDataSource, settingsRepository, serverRepository, imageCacheManager, assetCache
     )
 
     private val creator = BookmarkCreator(bookmarkDao, remoteDataSource, serverRepository, contentSync, repositoryScope)
@@ -139,7 +139,7 @@ class BookmarkRepository internal constructor(
     )
 
     private val listMembership = BookmarkListMembership(
-        bookmarkDao, remoteDataSource, settingsRepository, listDao,
+        settingsRepository, listDao,
         lastSyncNewBookmarks = { syncRunner.lastSyncNewBookmarks }
     )
 
@@ -403,26 +403,6 @@ class BookmarkRepository internal constructor(
      */
     suspend fun getListsNeedingNotification(serverId: String): List<Triple<String, String, Int>> =
         listMembership.getListsNeedingNotification(serverId)
-
-    /**
-     * Reconciles a bookmark's list membership after a quick action.
-     * Uses GET /bookmarks/{id}/lists — one API call.
-     *
-     * Smart list membership is server-computed and fully replaced with the server's answer.
-     * Manual list membership is kept from the local DB — the optimistic update applied by
-     * the action is already correct, and the queued server action may not have been
-     * processed yet when this call is made.
-     *
-     * @param smartListIds the IDs of all known smart lists — only these are overwritten
-     *                     by the server response; manual list IDs are preserved locally
-     * @return true if the server returned smart list membership (fresh data),
-     *         false if potentially stale (no smart lists returned by the server).
-     */
-    suspend fun reconcileBookmarkSmartListMembership(
-        server: Server,
-        bookmarkLocalId: Long,
-        smartListIds: Set<String>
-    ): Boolean = listMembership.reconcileBookmarkSmartListMembership(server, bookmarkLocalId, smartListIds)
 }
 
 // Shared with BookmarkActionsRepository.persistFinalReadingProgress, which must write on its own

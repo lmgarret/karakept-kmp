@@ -98,6 +98,40 @@ class BookmarkActionsRepository internal constructor(
     private val repositoryScope =
         kotlinx.coroutines.CoroutineScope(appDispatchers.io + kotlinx.coroutines.SupervisorJob())
 
+    internal val smartListProbe = SmartListMembershipProbe(
+        bookmarkDao, pendingActionDao, remoteDataSource, serverRepository, settingsRepository,
+        flushPendingActions = { processPendingActions(it) }
+    )
+
+    /** Smart lists whose cached membership a list edit may have left wrong, due a sync on next open. */
+    val smartListsNeedingRefresh: kotlinx.coroutines.flow.StateFlow<Set<String>>
+        get() = smartListProbe.needingRefresh
+
+    /** Clears [listId]'s flag, returning whether it was set — the caller then syncs that list. */
+    fun takeSmartListRefresh(listId: String): Boolean = smartListProbe.take(listId)
+
+    /**
+     * After a list edit of [bookmarkRemoteIds], asks the server whether each is still in the smart
+     * lists of [lists] the edit can affect, and writes each answer into that bookmark's cached
+     * list ids. What cannot be asked is flagged in [smartListsNeedingRefresh] instead.
+     *
+     * Runs on this repository's scope, not the caller's: the edit is already made, and leaving the
+     * screen must not leave its smart lists neither probed nor flagged.
+     */
+    fun reconcileSmartListsAfterEdit(
+        serverId: String,
+        bookmarkRemoteIds: List<String>,
+        lists: List<com.karakept.api.model.KarakeepList>
+    ): kotlinx.coroutines.Job = repositoryScope.launch {
+        try {
+            smartListProbe.probe(serverId, bookmarkRemoteIds, lists)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            AppLogger.e("BookmarkActionsRepository", "Smart-list probe failed: ${e.message}", e)
+        }
+    }
+
     /**
      * Archive a bookmark. Updates locally and queues for sync.
      */
@@ -314,31 +348,27 @@ class BookmarkActionsRepository internal constructor(
     }
 
     /**
-     * Move bookmark to a list.
+     * Add bookmark to a list, keeping every list it is already in.
      */
-    suspend fun moveToList(
+    suspend fun addToList(
         bookmarkRemoteId: String,
         serverId: String,
-        listId: String,
-        smartListIds: Set<String> = emptySet()
+        listId: String
     ) {
         withContext(appDispatchers.io) {
-            // Update local DB immediately (optimistic update).
-            // Also strip smart-list membership: the server recomputes it from the bookmark's
-            // manual lists, so a smart list that excludes the target list (e.g. All Feeds
-            // excludes Read Later) must lose this bookmark right away — otherwise it flashes
-            // back into that smart list when the user navigates to it before the sync lands.
-            // Smart lists it still belongs to are re-added by the next ForList sync.
+            smartListProbe.noteListEdit(serverId, bookmarkRemoteId)
+            // Update local DB immediately (optimistic update). Only the target list is touched:
+            // a bookmark can be in any number of lists, and what the addition does to its smart
+            // lists is the server's to say ([reconcileSmartListsAfterEdit]).
             val bookmark = bookmarkDao.getBookmarkByRemoteId(bookmarkRemoteId, serverId)
             bookmark?.let {
                 val currentListIds = it.listIds.split(",").map { id -> id.trim() }.filter { id -> id.isNotBlank() }
-                val newListIds = (currentListIds - smartListIds) + listId
-                if (newListIds.toSet() != currentListIds.toSet()) {
-                    bookmarkDao.insertBookmark(it.copy(listIds = newListIds.distinct().joinToString(",")))
+                if (listId !in currentListIds) {
+                    bookmarkDao.insertBookmark(it.copy(listIds = (currentListIds + listId).joinToString(",")))
                 }
             }
 
-            // Last state wins per (bookmark, list): a move/remove toggle storm collapses
+            // Last state wins per (bookmark, list): an add/remove toggle storm collapses
             // to the single action matching the final local state
             dedupListMembershipActions(bookmarkRemoteId, serverId, listId)
             queueAction(
@@ -362,6 +392,7 @@ class BookmarkActionsRepository internal constructor(
         listId: String
     ) {
         withContext(appDispatchers.io) {
+            smartListProbe.noteListEdit(serverId, bookmarkRemoteId)
             // Update local DB immediately (optimistic update)
             val bookmark = bookmarkDao.getBookmarkByRemoteId(bookmarkRemoteId, serverId)
             bookmark?.let {
@@ -514,7 +545,7 @@ class BookmarkActionsRepository internal constructor(
     }
 
     /**
-     * Removes queued move/remove actions targeting the same list for a bookmark,
+     * Removes queued add/remove actions targeting the same list for a bookmark,
      * so only the latest membership intent for that (bookmark, list) pair survives.
      */
     internal suspend fun dedupListMembershipActions(

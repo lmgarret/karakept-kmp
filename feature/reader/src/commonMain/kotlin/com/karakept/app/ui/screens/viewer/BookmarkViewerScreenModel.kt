@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.karakept.api.model.KarakeepList as KarakeepList
 import com.karakept.app.data.model.Bookmark
+import com.karakept.app.domain.ListMembershipChange
 import com.karakept.app.data.model.ContentSource
 import com.karakept.app.data.model.DateDisplayMode
 import com.karakept.app.data.model.LinkOpenMode
@@ -174,8 +175,9 @@ class BookmarkViewerScreenModel(
     /** Per-server AI capabilities, shared with the list. Callers index it by the bookmark's serverId. */
     val aiCapabilities: StateFlow<Map<String, AiCapabilities>> = bookmarkActionsRepository.aiCapabilities
 
-    private val _lists = MutableStateFlow<List<KarakeepList>>(emptyList())
-    val lists: StateFlow<List<KarakeepList>> = _lists.asStateFlow()
+    // Null until the first fetch lands, so the list sheet can tell "loading" from "no lists".
+    private val _lists = MutableStateFlow<List<KarakeepList>?>(null)
+    val lists: StateFlow<List<KarakeepList>?> = _lists.asStateFlow()
 
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
@@ -811,13 +813,15 @@ class BookmarkViewerScreenModel(
         }
     }
 
-    fun moveBookmarkToList(bookmark: Bookmark, listId: String) {
+    fun updateBookmarkLists(bookmark: Bookmark, change: ListMembershipChange) {
         viewModelScope.launch {
-            bookmarkActionsRepository.moveToList(
-                bookmark.remoteId,
-                bookmark.serverId,
-                listId
-            )
+            change.added.forEach { bookmarkActionsRepository.addToList(bookmark.remoteId, bookmark.serverId, it) }
+            change.removed.forEach { bookmarkActionsRepository.removeFromList(bookmark.remoteId, bookmark.serverId, it) }
+            if (!change.isEmpty) {
+                bookmarkActionsRepository.reconcileSmartListsAfterEdit(
+                    bookmark.serverId, listOf(bookmark.remoteId), _lists.value ?: listRepository.lists.value
+                )
+            }
         }
     }
 

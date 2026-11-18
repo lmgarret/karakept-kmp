@@ -128,13 +128,13 @@ class BookmarkActionController internal constructor(
                         BookmarkActionResult.Success("Tags updated")
                     }
 
-                    is BookmarkActionEvent.MoveToList -> {
-                        bookmarkActionsRepository.moveToList(
+                    is BookmarkActionEvent.AddToList -> {
+                        bookmarkActionsRepository.addToList(
                             event.bookmark.remoteId,
                             event.bookmark.serverId,
                             event.listId
                         )
-                        BookmarkActionResult.Success("Moved to list")
+                        BookmarkActionResult.Success("Added to list")
                     }
 
                     is BookmarkActionEvent.RemoveFromList -> {

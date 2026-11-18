@@ -18,7 +18,8 @@ import com.karakept.api.model.KarakeepList
 import com.karakept.app.data.model.Bookmark
 import com.karakept.app.data.repository.AiCapabilities
 import com.karakept.app.domain.action.AiAction
-import com.karakept.app.ui.components.ListPickerDialog
+import com.karakept.app.domain.ListMembershipUtils
+import com.karakept.app.ui.components.ListMembershipDialog
 import com.karakept.app.ui.components.einkOutlineBorder
 import com.karakept.app.ui.components.tags.TagEditorDialog
 import com.karakept.app.ui.icons.AppIcons
@@ -27,7 +28,7 @@ import com.karakept.app.ui.icons.AppIcons
  * Desktop context menu for bookmark actions, shown as a DropdownMenu at the right-click position.
  * Uses the same [BookmarkAction] sealed class as [BookmarkActionsMenu].
  *
- * "Move to List" and "Edit Tags" open the shared [ListPickerDialog] / [TagEditorDialog] and emit
+ * "Edit Lists" and "Edit Tags" open the shared [ListMembershipDialog] / [TagEditorDialog] and emit
  * the chosen value, mirroring [BookmarkActionsMenu].
  */
 @Composable
@@ -100,7 +101,7 @@ fun BookmarkContextMenu(
 
         // Organization actions
         DropdownMenuItem(
-            text = { Text("Move to List") },
+            text = { Text("Edit Lists") },
             leadingIcon = { Icon(imageVector = AppIcons.Default.FolderOpen, contentDescription = null) },
             onClick = { showListPicker = true }
         )
@@ -194,12 +195,12 @@ fun BookmarkContextMenu(
     }
 
     // List picker dialog
-    if (showListPicker && availableLists.isNotEmpty()) {
-        ListPickerDialog(
+    if (showListPicker) {
+        ListMembershipDialog(
             lists = availableLists,
-            currentListIds = bookmark.listIds.split(",").filter { it.isNotBlank() },
-            onListSelected = { listId ->
-                onAction(BookmarkAction.MoveToList(listId))
+            bookmarksListIds = listOf(ListMembershipUtils.parseListIds(bookmark.listIds)),
+            onApply = { change ->
+                if (!change.isEmpty) onAction(BookmarkAction.UpdateLists(change))
                 showListPicker = false
                 onDismiss()
             },

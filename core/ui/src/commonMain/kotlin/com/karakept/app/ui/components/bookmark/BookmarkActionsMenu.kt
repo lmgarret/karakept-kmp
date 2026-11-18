@@ -27,7 +27,9 @@ import com.karakept.api.model.KarakeepList as KarakeepList
 import com.karakept.app.data.model.Bookmark
 import com.karakept.app.data.repository.AiCapabilities
 import com.karakept.app.domain.action.AiAction
-import com.karakept.app.ui.components.ListPickerDialog
+import com.karakept.app.domain.ListMembershipChange
+import com.karakept.app.domain.ListMembershipUtils
+import com.karakept.app.ui.components.ListMembershipDialog
 import com.karakept.app.ui.components.einkModalBorder
 import com.karakept.app.ui.components.tags.TagEditorDialog
 import com.karakept.app.ui.icons.AppIcons
@@ -108,7 +110,7 @@ fun BookmarkActionsMenu(
 
         // Organization actions
         DropdownMenuItem(
-            text = { Text("Move to List") },
+            text = { Text("Edit Lists") },
             leadingIcon = {
                 Icon(
                     imageVector = AppIcons.Default.FolderOpen,
@@ -263,12 +265,12 @@ fun BookmarkActionsMenu(
     }
 
     // List picker dialog
-    if (showListPicker && availableLists.isNotEmpty()) {
-        ListPickerDialog(
+    if (showListPicker) {
+        ListMembershipDialog(
             lists = availableLists,
-            currentListIds = bookmark.listIds.split(",").filter { it.isNotBlank() },
-            onListSelected = { listId ->
-                onAction(BookmarkAction.MoveToList(listId))
+            bookmarksListIds = listOf(ListMembershipUtils.parseListIds(bookmark.listIds)),
+            onApply = { change ->
+                if (!change.isEmpty) onAction(BookmarkAction.UpdateLists(change))
                 showListPicker = false
                 onDismiss()
             },
@@ -298,7 +300,7 @@ sealed class BookmarkAction {
     data object ToggleFavorite : BookmarkAction()
     data object ToggleArchive : BookmarkAction()
     data object ToggleRead : BookmarkAction()
-    data class MoveToList(val listId: String) : BookmarkAction()
+    data class UpdateLists(val change: ListMembershipChange) : BookmarkAction()
     data class UpdateTags(val tags: List<String>) : BookmarkAction()
     data object Share : BookmarkAction()
     data object OpenInBrowser : BookmarkAction()

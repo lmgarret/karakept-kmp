@@ -7,6 +7,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import com.karakept.api.model.KarakeepList
 import com.karakept.app.data.model.Bookmark
+import com.karakept.app.domain.ListMembershipChange
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import org.junit.Rule
@@ -18,7 +19,7 @@ import org.robolectric.annotation.Config
 /**
  * Compose UI tests for the desktop [BookmarkContextMenu].
  *
- * Regression coverage for #231: "Move to List" and "Edit Tags" must open the
+ * Regression coverage for #231: "Edit Lists" and "Edit Tags" must open the
  * shared pickers and emit a real value, rather than firing a no-op action.
  */
 @RunWith(RobolectricTestRunner::class)
@@ -50,7 +51,7 @@ class BookmarkContextMenuTest {
     )
 
     @Test
-    fun `Move to List opens picker and emits selected list id`() {
+    fun `Edit Lists opens the membership sheet and emits the change`() {
         var emitted: BookmarkAction? = null
         composeTestRule.setContent {
             MaterialTheme {
@@ -64,15 +65,15 @@ class BookmarkContextMenuTest {
             }
         }
 
-        composeTestRule.onNodeWithText("Move to List").performClick()
+        composeTestRule.onNodeWithText("Edit Lists").performClick()
 
-        // The list picker should now be visible with the available lists.
         composeTestRule.onNodeWithText("Read Later").assertIsDisplayed()
         composeTestRule.onNodeWithText("Read Later").performClick()
+        composeTestRule.onNodeWithText("Done").performClick()
 
         val action = emitted
-        assertTrue(action is BookmarkAction.MoveToList, "Expected MoveToList, got $action")
-        assertEquals("list-1", action.listId)
+        assertTrue(action is BookmarkAction.UpdateLists, "Expected UpdateLists, got $action")
+        assertEquals(ListMembershipChange(added = setOf("list-1")), action.change)
     }
 
     @Test
