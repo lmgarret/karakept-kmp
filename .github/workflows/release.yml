@@ -86,6 +86,34 @@ jobs:
                 Write for people who use the app, not for its developers.
                 Name the platform (Android, macOS, Linux) when a change only affects one.
                 Never mention CI, dependency bumps, tests or refactoring.
+            # F-Droid's "What's new" box: plain text, at most 500 characters. Committed by
+            # the version bump below as the fastlane changelog for this versionCode.
+            fdroid:
+              preset: customer
+              languages: [en]
+              output_format: plain
+              tone: professional
+              sections: [features, improvements, fixes]
+              summary_only: true
+              user_facing_only: true
+              include_infrastructure: false
+              emojis: false
+              link_prs: false
+              link_issues: false
+              link_commits: false
+              generate_title: false
+              generate_summary: false
+              generate_highlights: 0
+              validation:
+                max_length: 500
+                # The bump step checks the length itself and drops an overlong text, so a
+                # miss here never blocks a release.
+                on_failure: warn
+              instructions: |
+                Write the "What's new" text of an Android app store listing, under 500 characters.
+                Plain text, one short line per change, each starting with "- ". No headings.
+                Android changes only; leave out anything specific to macOS, Linux or Windows.
+                Never mention CI, dependency bumps, tests or refactoring.
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 
@@ -119,6 +147,7 @@ jobs:
         if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
         env:
           VERSION: ${{ steps.version.outputs.name }}
+          CHANGELOG_FILES: ${{ steps.changelog.outputs.changelog_files }}
         run: |
           if [[ ! "$VERSION" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
             echo "::error::Release version '$VERSION' is not MAJOR.MINOR.PATCH"
@@ -133,9 +162,28 @@ jobs:
             echo "::error::version.properties at ${GITHUB_REF_NAME} does not say ${VERSION} (${CODE}). Bump it before tagging."
             exit 1
           fi
+
+          # Release notes F-Droid shows for this versionCode. Optional: a missing or overlong
+          # text is skipped rather than blocking the release.
+          NOTES="fastlane/metadata/android/en-US/changelogs/${CODE}.txt"
+          NOTES_SRC=$(jq -r '.fdroid.en // empty' <<< "${CHANGELOG_FILES:-null}" 2>/dev/null || true)
+          if [ -n "$NOTES_SRC" ] && [ -s "$NOTES_SRC" ]; then
+            LEN=$(wc -m < "$NOTES_SRC")
+            if [ "$LEN" -le 500 ]; then
+              mkdir -p "$(dirname "$NOTES")"
+              cp "$NOTES_SRC" "$NOTES"
+              git add "$NOTES"
+            else
+              echo "::warning::F-Droid changelog is ${LEN} characters (limit 500); not committed."
+            fi
+          else
+            echo "::warning::No F-Droid changelog was generated; not committed."
+          fi
+
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -m "chore: release ${VERSION}" -- version.properties
+          git add version.properties
+          git commit -m "chore: release ${VERSION}"
           git push origin "HEAD:${GITHUB_REF_NAME}"
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 

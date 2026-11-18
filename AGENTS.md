@@ -1049,6 +1049,8 @@ Releases (`.github/workflows/release.yml`):
 - The version lives in `version.properties` (`versionCode` = major×10000 + minor×100 + patch). A
   dispatched release commits the bump to main and tags that commit, because F-Droid builds from the
   tag and reads its version from that file; a pushed `v*` tag must already carry it.
+- The same bump commit adds F-Droid's release notes, `fastlane/metadata/android/en-US/changelogs/<versionCode>.txt`,
+  from the changelog action's `fdroid` audience (plain text, 500 characters at most; skipped if longer).
 - Signing via `KEYSTORE_PATH`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD` environment variables.
 - Changelog generated automatically.
 
