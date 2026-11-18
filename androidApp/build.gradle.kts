@@ -25,6 +25,12 @@ android {
         versionName = (project.findProperty("versionName") as String?) ?: "1.0"
     }
 
+    // AGP otherwise embeds a Google-encrypted dependency report in the APK, which F-Droid rejects.
+    dependenciesInfo {
+        includeInApk = false
+        includeInBundle = false
+    }
+
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
