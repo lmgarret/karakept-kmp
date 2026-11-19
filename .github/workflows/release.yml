@@ -289,18 +289,37 @@ jobs:
             notifications
             wrapper
 
+      # The release key: the one F-Droid pins in AllowedAPKSigningKeys. PR builds (pr-build.yml)
+      # sign their separate .dev app with the DEV_* debug keystore instead.
       - name: Decode keystore
         env:
-          DEV_KEYSTORE_BASE64: ${{ secrets.DEV_KEYSTORE_BASE64 }}
-        run: echo "$DEV_KEYSTORE_BASE64" | base64 -d > ${{ github.workspace }}/karakept-dev.keystore
+          RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$RELEASE_KEYSTORE_BASE64" ]; then
+            echo "::error::RELEASE_KEYSTORE_BASE64 is not set; refusing to build a release signed with a debug key."
+            exit 1
+          fi
+          echo "$RELEASE_KEYSTORE_BASE64" | base64 -d > ${{ github.workspace }}/karakept-release.keystore
 
       - name: Build release APK
         env:
-          KEYSTORE_PATH: ${{ github.workspace }}/karakept-dev.keystore
-          KEYSTORE_PASSWORD: ${{ secrets.DEV_KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.DEV_KEY_ALIAS }}
+          KEYSTORE_PATH: ${{ github.workspace }}/karakept-release.keystore
+          KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
         # No -PversionName/-PversionCode: the APK takes version.properties, as F-Droid's build does.
         run: ./gradlew :androidApp:assembleRelease
+
+      # Gradle signs with the debug key when no keystore is configured, so make sure it was not.
+      - name: Check the APK is not debug-signed
+        run: |
+          APK=$(find androidApp/build/outputs/apk/release -name "*.apk" | head -1)
+          APKSIGNER=$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)apksigner
+          CERTS=$("$APKSIGNER" verify --print-certs "$APK")
+          echo "$CERTS" | grep -E 'DN|SHA-256'
+          if echo "$CERTS" | grep -q 'CN=Android Debug'; then
+            echo "::error::The release APK is signed with a debug certificate."
+            exit 1
+          fi
 
       - name: Rename APK
         run: |
