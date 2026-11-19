@@ -66,11 +66,17 @@ jobs:
             notifications
             wrapper
 
+      # The dev key (karakept-dev), never the release key: this job runs the PR's own build
+      # scripts and dependencies, and the release key lives in the release-signing environment.
       - name: Decode keystore
-        if: ${{ env.DEV_KEYSTORE_BASE64 != '' }}
         env:
           DEV_KEYSTORE_BASE64: ${{ secrets.DEV_KEYSTORE_BASE64 }}
-        run: echo "$DEV_KEYSTORE_BASE64" | base64 -d > ${{ github.workspace }}/karakept-dev.keystore
+        run: |
+          if [ -z "$DEV_KEYSTORE_BASE64" ]; then
+            echo "::error::DEV_KEYSTORE_BASE64 is not set."
+            exit 1
+          fi
+          echo "$DEV_KEYSTORE_BASE64" | base64 -d > ${{ github.workspace }}/karakept-dev.keystore
 
       - name: Build dev release APK
         env:
@@ -78,6 +84,19 @@ jobs:
           KEYSTORE_PASSWORD: ${{ secrets.DEV_KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.DEV_KEY_ALIAS }}
         run: ./gradlew :androidApp:assembleDevRelease
+
+      # Gradle signs with the debug key when no keystore is configured, so make sure it was not:
+      # a debug-signed dev APK would not update over one signed with karakept-dev.
+      - name: Check the APK is not debug-signed
+        run: |
+          APK=$(find androidApp/build/outputs/apk/devRelease -name "*.apk" | head -1)
+          APKSIGNER=$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)apksigner
+          CERTS=$("$APKSIGNER" verify --print-certs "$APK")
+          echo "$CERTS" | grep -E 'DN|SHA-256'
+          if echo "$CERTS" | grep -q 'CN=Android Debug'; then
+            echo "::error::The dev APK is signed with a debug certificate."
+            exit 1
+          fi
 
       - name: Upload dev release APK
         id: upload-artifact

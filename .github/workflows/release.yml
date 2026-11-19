@@ -20,10 +20,17 @@ jobs:
     runs-on: ubuntu-latest
     # Holds ANTHROPIC_API_KEY; the environment only admits main and v* tags.
     environment: release
+    # Pushes the release tag (with its version-bump commit).
+    permissions:
+      contents: write
     outputs:
       tag: ${{ steps.version.outputs.tag }}
       name: ${{ steps.version.outputs.name }}
       body: ${{ steps.body.outputs.body }}
+      # The commit the release tags: the version bump when one is pushed. Only the Android
+      # build checks it out (with a read-only cache); the desktop builds use the triggering
+      # commit and take the version as -P properties.
+      sha: ${{ steps.bump.outputs.sha || github.sha }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -34,8 +41,12 @@ jobs:
         if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
         id: prev_tag
         run: |
-          # --match skips the rolling `nightly` tag, which is usually nearer.
-          PREV=$(git describe --tags --abbrev=0 --match 'v[0-9]*' HEAD^ 2>/dev/null || echo "")
+          # Newest release tag by version, not `git describe`: a release tags its version-bump
+          # commit, which is never merged into main, so no release tag is an ancestor of HEAD.
+          # The pattern skips the rolling `nightly` tag; a tag push skips its own tag.
+          CURRENT=""
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then CURRENT="$GITHUB_REF_NAME"; fi
+          PREV=$(git tag --list 'v[0-9]*' --sort=-v:refname | grep -vxF "$CURRENT" | head -n 1 || true)
           echo "tag=${PREV}" >> "$GITHUB_OUTPUT"
 
       - name: Generate AI changelog
@@ -81,13 +92,44 @@ jobs:
                 Write for people who use the app, not for its developers.
                 Name the platform (Android, macOS, Linux) when a change only affects one.
                 Never mention CI, dependency bumps, tests or refactoring.
+            # F-Droid's "What's new" box: plain text, at most 500 characters. Committed by
+            # the version bump below as the fastlane changelog for this versionCode.
+            fdroid:
+              preset: customer
+              languages: [en]
+              output_format: plain
+              tone: professional
+              sections: [features, improvements, fixes]
+              summary_only: true
+              user_facing_only: true
+              include_infrastructure: false
+              emojis: false
+              link_prs: false
+              link_issues: false
+              link_commits: false
+              generate_title: false
+              generate_summary: false
+              generate_highlights: 0
+              validation:
+                max_length: 500
+                # The bump step checks the length itself and drops an overlong text, so a
+                # miss here never blocks a release.
+                on_failure: warn
+              instructions: |
+                Write the "What's new" text of an Android app store listing, under 500 characters.
+                Plain text, one short line per change, each starting with "- ". No headings.
+                Android changes only; leave out anything specific to macOS, Linux or Windows.
+                Never mention CI, dependency bumps, tests or refactoring.
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 
       - name: Generate commit log
         id: commitlog
+        env:
+          PREV_TAG: ${{ steps.prev_tag.outputs.tag }}
         run: |
-          PREVIOUS_TAG=$(git describe --tags --abbrev=0 --match 'v[0-9]*' HEAD^ 2>/dev/null || git rev-list --max-parents=0 HEAD)
+          # PREV_TAG..HEAD still starts at the right place: the bump commit's parent is on main.
+          PREVIOUS_TAG=${PREV_TAG:-$(git rev-list --max-parents=0 HEAD)}
           LOG=$(git log --oneline "${PREVIOUS_TAG}..HEAD" 2>/dev/null || git log --oneline)
           {
             echo "log<<COMMITLOG_EOF"
@@ -106,6 +148,61 @@ jobs:
           fi
           echo "tag=v${VERSION}" >> "$GITHUB_OUTPUT"
           echo "name=${VERSION}" >> "$GITHUB_OUTPUT"
+
+      # F-Droid builds from the tag and reads the version from version.properties, so the
+      # tagged commit has to carry it.
+      - name: Commit version bump
+        id: bump
+        if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
+        env:
+          VERSION: ${{ steps.version.outputs.name }}
+          CHANGELOG_FILES: ${{ steps.changelog.outputs.changelog_files }}
+        run: |
+          if [[ ! "$VERSION" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+            echo "::error::Release version '$VERSION' is not MAJOR.MINOR.PATCH"
+            exit 1
+          fi
+          CODE=$(( BASH_REMATCH[1] * 10000 + BASH_REMATCH[2] * 100 + BASH_REMATCH[3] ))
+          sed -i -e "s/^versionName=.*/versionName=${VERSION}/" -e "s/^versionCode=.*/versionCode=${CODE}/" version.properties
+          if git diff --quiet -- version.properties; then
+            exit 0
+          fi
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            echo "::error::version.properties at ${GITHUB_REF_NAME} does not say ${VERSION} (${CODE}). Bump it before tagging."
+            exit 1
+          fi
+
+          # Release notes F-Droid shows for this versionCode. Optional: a missing or overlong
+          # text is skipped rather than blocking the release.
+          NOTES="fastlane/metadata/android/en-US/changelogs/${CODE}.txt"
+          NOTES_SRC=$(jq -r '.fdroid.en // empty' <<< "${CHANGELOG_FILES:-null}" 2>/dev/null || true)
+          if [ -n "$NOTES_SRC" ] && [ -s "$NOTES_SRC" ]; then
+            LEN=$(wc -m < "$NOTES_SRC")
+            if [ "$LEN" -le 500 ]; then
+              mkdir -p "$(dirname "$NOTES")"
+              cp "$NOTES_SRC" "$NOTES"
+              git add "$NOTES"
+            else
+              echo "::warning::F-Droid changelog is ${LEN} characters (limit 500); not committed."
+            fi
+          else
+            echo "::warning::No F-Droid changelog was generated; not committed."
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add version.properties
+          git commit -m "chore: release ${VERSION}"
+          # Only the tag is pushed: main's ruleset refuses this job, and the commit only has to
+          # be reachable from the tag F-Droid builds. GITHUB_TOKEN pushes start no workflows,
+          # so this does not re-trigger the tag-push release.
+          if git ls-remote --exit-code --tags origin "refs/tags/v${VERSION}" >/dev/null; then
+            echo "::error::Tag v${VERSION} already exists. Delete it or release another version."
+            exit 1
+          fi
+          git tag "v${VERSION}"
+          git push origin "refs/tags/v${VERSION}"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Compose release body
         id: body
@@ -163,11 +260,15 @@ jobs:
     name: Build Android APK
     needs: [resolve-version, android-tests]
     runs-on: ubuntu-latest
-    # Holds the signing keystore; the environment only admits main and v* tags.
-    environment: release
+    # Holds the release keystore (RELEASE_KEYSTORE_*), and nothing else uses it: PR builds run
+    # in `release`, so they never see it. Admit only main and v* tags, or a dispatch from a
+    # branch could run an edited workflow with the key.
+    environment: release-signing
     steps:
+      # The commit the release tags, so the APK is built from the same source F-Droid builds.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ needs.resolve-version.outputs.sha }}
           submodules: true
 
       - uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
@@ -177,6 +278,9 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
         with:
+          # Read-only: this job builds a commit another job computed, and must not write the
+          # cache the other release jobs restore.
+          cache-read-only: true
           # basic = open-source (MIT) cache provider; v6's default 'enhanced'
           # provider is proprietary under Gradle's commercial Terms of Use.
           cache-provider: basic
@@ -187,20 +291,37 @@ jobs:
             notifications
             wrapper
 
+      # The release key: the one F-Droid pins in AllowedAPKSigningKeys. PR builds (pr-build.yml)
+      # sign their separate .dev app with the DEV_* debug keystore instead.
       - name: Decode keystore
         env:
-          DEV_KEYSTORE_BASE64: ${{ secrets.DEV_KEYSTORE_BASE64 }}
-        run: echo "$DEV_KEYSTORE_BASE64" | base64 -d > ${{ github.workspace }}/karakept-dev.keystore
+          RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$RELEASE_KEYSTORE_BASE64" ]; then
+            echo "::error::RELEASE_KEYSTORE_BASE64 is not set; refusing to build a release signed with a debug key."
+            exit 1
+          fi
+          echo "$RELEASE_KEYSTORE_BASE64" | base64 -d > ${{ github.workspace }}/karakept-release.keystore
 
       - name: Build release APK
         env:
-          KEYSTORE_PATH: ${{ github.workspace }}/karakept-dev.keystore
-          KEYSTORE_PASSWORD: ${{ secrets.DEV_KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.DEV_KEY_ALIAS }}
-        run: >
-          ./gradlew :androidApp:assembleRelease
-          -PversionName=${{ needs.resolve-version.outputs.name }}
-          -PversionCode=${{ github.run_number }}
+          KEYSTORE_PATH: ${{ github.workspace }}/karakept-release.keystore
+          KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+        # No -PversionName/-PversionCode: the APK takes version.properties, as F-Droid's build does.
+        run: ./gradlew :androidApp:assembleRelease
+
+      # Gradle signs with the debug key when no keystore is configured, so make sure it was not.
+      - name: Check the APK is not debug-signed
+        run: |
+          APK=$(find androidApp/build/outputs/apk/release -name "*.apk" | head -1)
+          APKSIGNER=$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)apksigner
+          CERTS=$("$APKSIGNER" verify --print-certs "$APK")
+          echo "$CERTS" | grep -E 'DN|SHA-256'
+          if echo "$CERTS" | grep -q 'CN=Android Debug'; then
+            echo "::error::The release APK is signed with a debug certificate."
+            exit 1
+          fi
 
       - name: Rename APK
         run: |
@@ -417,6 +538,7 @@ jobs:
         uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3.0.4
         with:
           tag_name: ${{ needs.resolve-version.outputs.tag }}
+          target_commitish: ${{ needs.resolve-version.outputs.sha }}
           name: ${{ needs.resolve-version.outputs.tag }}
           files: |
             apk-release/*.apk
