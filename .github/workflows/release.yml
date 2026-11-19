@@ -27,10 +27,9 @@ jobs:
       tag: ${{ steps.version.outputs.tag }}
       name: ${{ steps.version.outputs.name }}
       body: ${{ steps.body.outputs.body }}
-      code: ${{ steps.bump.outputs.code }}
-      # The commit the release tags: the version bump when one is pushed. Builds check out
-      # the triggering commit and take the version as -P properties instead, so no job runs
-      # code from a ref another job computed.
+      # The commit the release tags: the version bump when one is pushed. Only the Android
+      # build checks it out (with a read-only cache); the desktop builds use the triggering
+      # commit and take the version as -P properties.
       sha: ${{ steps.bump.outputs.sha || github.sha }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -157,7 +156,6 @@ jobs:
             exit 1
           fi
           CODE=$(( BASH_REMATCH[1] * 10000 + BASH_REMATCH[2] * 100 + BASH_REMATCH[3] ))
-          echo "code=${CODE}" >> "$GITHUB_OUTPUT"
           sed -i -e "s/^versionName=.*/versionName=${VERSION}/" -e "s/^versionCode=.*/versionCode=${CODE}/" version.properties
           if git diff --quiet -- version.properties; then
             exit 0
@@ -250,8 +248,10 @@ jobs:
     # Holds the signing keystore; the environment only admits main and v* tags.
     environment: release
     steps:
+      # The commit the release tags, so the APK is built from the same source F-Droid builds.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ needs.resolve-version.outputs.sha }}
           submodules: true
 
       - uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
@@ -261,6 +261,9 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
         with:
+          # Read-only: this job builds a commit another job computed, and must not write the
+          # cache the other release jobs restore.
+          cache-read-only: true
           # basic = open-source (MIT) cache provider; v6's default 'enhanced'
           # provider is proprietary under Gradle's commercial Terms of Use.
           cache-provider: basic
@@ -281,11 +284,8 @@ jobs:
           KEYSTORE_PATH: ${{ github.workspace }}/karakept-dev.keystore
           KEYSTORE_PASSWORD: ${{ secrets.DEV_KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.DEV_KEY_ALIAS }}
-        # The same values the bump commit writes to version.properties, which F-Droid builds from.
-        run: >
-          ./gradlew :androidApp:assembleRelease
-          -PversionName=${{ needs.resolve-version.outputs.name }}
-          -PversionCode=${{ needs.resolve-version.outputs.code }}
+        # No -PversionName/-PversionCode: the APK takes version.properties, as F-Droid's build does.
+        run: ./gradlew :androidApp:assembleRelease
 
       - name: Rename APK
         run: |
