@@ -28,9 +28,9 @@ android {
         applicationId = "com.karakept.app"
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
-        versionCode = ((project.findProperty("versionCode") as String?)
+        versionCode = ((project.findProperty("versionCode") as String?)?.takeIf { it.isNotBlank() }
             ?: releaseVersion.getProperty("versionCode")).toInt()
-        versionName = (project.findProperty("versionName") as String?)
+        versionName = (project.findProperty("versionName") as String?)?.takeIf { it.isNotBlank() }
             ?: releaseVersion.getProperty("versionName")
     }
 
