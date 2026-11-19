@@ -20,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     # Holds ANTHROPIC_API_KEY; the environment only admits main and v* tags.
     environment: release
-    # Pushes the version bump to main.
+    # Pushes the release tag (with its version-bump commit).
     permissions:
       contents: write
     outputs:
@@ -41,8 +41,12 @@ jobs:
         if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
         id: prev_tag
         run: |
-          # --match skips the rolling `nightly` tag, which is usually nearer.
-          PREV=$(git describe --tags --abbrev=0 --match 'v[0-9]*' HEAD^ 2>/dev/null || echo "")
+          # Newest release tag by version, not `git describe`: a release tags its version-bump
+          # commit, which is never merged into main, so no release tag is an ancestor of HEAD.
+          # The pattern skips the rolling `nightly` tag; a tag push skips its own tag.
+          CURRENT=""
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then CURRENT="$GITHUB_REF_NAME"; fi
+          PREV=$(git tag --list 'v[0-9]*' --sort=-v:refname | grep -vxF "$CURRENT" | head -n 1 || true)
           echo "tag=${PREV}" >> "$GITHUB_OUTPUT"
 
       - name: Generate AI changelog
@@ -121,8 +125,11 @@ jobs:
 
       - name: Generate commit log
         id: commitlog
+        env:
+          PREV_TAG: ${{ steps.prev_tag.outputs.tag }}
         run: |
-          PREVIOUS_TAG=$(git describe --tags --abbrev=0 --match 'v[0-9]*' HEAD^ 2>/dev/null || git rev-list --max-parents=0 HEAD)
+          # PREV_TAG..HEAD still starts at the right place: the bump commit's parent is on main.
+          PREVIOUS_TAG=${PREV_TAG:-$(git rev-list --max-parents=0 HEAD)}
           LOG=$(git log --oneline "${PREVIOUS_TAG}..HEAD" 2>/dev/null || git log --oneline)
           {
             echo "log<<COMMITLOG_EOF"
@@ -186,7 +193,15 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add version.properties
           git commit -m "chore: release ${VERSION}"
-          git push origin "HEAD:${GITHUB_REF_NAME}"
+          # Only the tag is pushed: main's ruleset refuses this job, and the commit only has to
+          # be reachable from the tag F-Droid builds. GITHUB_TOKEN pushes start no workflows,
+          # so this does not re-trigger the tag-push release.
+          if git ls-remote --exit-code --tags origin "refs/tags/v${VERSION}" >/dev/null; then
+            echo "::error::Tag v${VERSION} already exists. Delete it or release another version."
+            exit 1
+          fi
+          git tag "v${VERSION}"
+          git push origin "refs/tags/v${VERSION}"
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Compose release body

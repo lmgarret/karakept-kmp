@@ -1047,8 +1047,11 @@ CI runs on every PR targeting `main` (`.github/workflows/ci.yml`):
 Releases (`.github/workflows/release.yml`):
 - Builds signed Android APK/AAB and desktop packages.
 - The version lives in `version.properties` (`versionCode` = major×10000 + minor×100 + patch). A
-  dispatched release commits the bump to main and tags that commit, because F-Droid builds from the
-  tag and reads its version from that file; a pushed `v*` tag must already carry it.
+  dispatched release commits the bump and pushes it **as the `v*` tag only**, because F-Droid builds
+  from the tag and reads its version from that file, and main's ruleset refuses the workflow's
+  push. So the copy on main is not the current version, and no release tag is an ancestor of main:
+  find the previous release with `git tag --sort=-v:refname`, not `git describe`. A pushed `v*` tag
+  must already carry the version.
 - The same bump commit adds F-Droid's release notes, `fastlane/metadata/android/en-US/changelogs/<versionCode>.txt`,
   from the changelog action's `fdroid` audience (plain text, 500 characters at most; skipped if longer).
 - Signing via `KEYSTORE_PATH`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD` environment variables.
