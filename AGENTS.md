@@ -1055,9 +1055,11 @@ Releases (`.github/workflows/release.yml`):
 - The same bump commit adds F-Droid's release notes, `fastlane/metadata/android/en-US/changelogs/<versionCode>.txt`,
   from the changelog action's `fdroid` audience (plain text, 500 characters at most; skipped if longer).
 - Signing via `KEYSTORE_PATH`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD` environment variables.
-  Releases use the `RELEASE_KEYSTORE_*` secrets: the key F-Droid pins, which can never change, so the
-  job fails rather than ship an APK signed with a debug certificate (Gradle's silent fallback). PR builds
-  (`pr-build.yml`, the separate `.dev` app) use the `DEV_*` secrets, which hold a debug keystore.
+  Releases use the `RELEASE_KEYSTORE_*` secrets in the `release-signing` environment, which only
+  `release.yml`'s `build-android` job names: the key F-Droid pins, which can never change. PR builds
+  (`pr-build.yml`, the separate `.dev` app) run the PR's own build code, so they get the `DEV_*` secrets
+  (the `karakept-dev` key) in the `release` environment and never the release key. Both jobs fail
+  rather than ship an APK signed with a debug certificate (Gradle's silent fallback).
 - Changelog generated automatically.
 
 ---

@@ -260,8 +260,10 @@ jobs:
     name: Build Android APK
     needs: [resolve-version, android-tests]
     runs-on: ubuntu-latest
-    # Holds the signing keystore; the environment only admits main and v* tags.
-    environment: release
+    # Holds the release keystore (RELEASE_KEYSTORE_*), and nothing else uses it: PR builds run
+    # in `release`, so they never see it. Admit only main and v* tags, or a dispatch from a
+    # branch could run an edited workflow with the key.
+    environment: release-signing
     steps:
       # The commit the release tags, so the APK is built from the same source F-Droid builds.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
