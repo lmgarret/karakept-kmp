@@ -1,0 +1,15 @@
+<p>Karakept is an unofficial client for <a href="https://karakeep.app">Karakeep</a>, the self-hosted bookmark manager. Connect it to your own Karakeep server to read, organise and search your bookmarks, even while offline.</p>
+
+<p><b>Features</b></p>
+<ul>
+<li>Browse, search and filter the bookmarks synced from your server</li>
+<li>Customisable list layouts, from dense text rows to image-rich cards</li>
+<li>Built-in reader view with adjustable fonts, themes and highlights</li>
+<li>Tag management and filtering</li>
+<li>Nested lists, including smart lists</li>
+<li>Offline access: changes are queued and synced when you reconnect</li>
+<li>E-ink mode for electronic-paper readers, with support for hardware page-turn buttons</li>
+<li>Material 3 design with dynamic colours and a dark theme</li>
+</ul>
+
+<p>Karakept needs a Karakeep server. It talks only to the server you configure and has no analytics or tracking.</p>

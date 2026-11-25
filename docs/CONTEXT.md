@@ -21,6 +21,8 @@ it is only one of them.
 - A backup file written by an older version can no longer be restored.
 - A gesture, key binding or button a user relies on moves or disappears.
 - A screen is removed or a feature is dropped.
+- The Android signing key changes. An installed copy then refuses the update, so users have to
+  export a backup, uninstall and reinstall. Say so prominently, with those steps.
 
 ## Not breaking — leave out or file under internals
 
