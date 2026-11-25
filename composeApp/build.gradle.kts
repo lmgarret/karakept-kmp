@@ -138,7 +138,7 @@ kotlin {
     jvm("desktop")
     
     sourceSets {
-        val commonMain by getting {
+        getByName("commonMain") {
             kotlin.srcDir(generateAppVersion)
             dependencies {
                 // API Client (generated from OpenAPI spec)
@@ -198,7 +198,7 @@ kotlin {
                 implementation(libs.ksoup)
             }
         }
-        val androidMain by getting {
+        getByName("androidMain") {
             dependencies {
                 implementation(libs.compose.ui.tooling.preview)
                 implementation(libs.androidx.activity.compose)
@@ -213,7 +213,7 @@ kotlin {
                 implementation(libs.koin.androidx.workmanager)
             }
         }
-        val desktopMain by getting {
+        getByName("desktopMain") {
             dependencies {
                 implementation(currentDesktopComposeDependency())
                 // ktor-client-darwin is for native macOS/iOS, not JVM desktop.
@@ -229,7 +229,7 @@ kotlin {
                 implementation(libs.nativefiledialog)
             }
         }
-        val desktopTest by getting {
+        getByName("desktopTest") {
             dependencies {
                 implementation(libs.kotlinx.coroutines.test)
                 implementation(libs.junit)
@@ -239,7 +239,7 @@ kotlin {
                 implementation(libs.compose.desktop.ui.test.junit4)
             }
         }
-        val androidHostTest by getting {
+        getByName("androidHostTest") {
             dependencies {
                 implementation(libs.compose.ui.test.junit4)
                 implementation(libs.robolectric)
@@ -249,7 +249,7 @@ kotlin {
                 implementation(libs.androidx.test.core)
             }
         }
-        val commonTest by getting {
+        getByName("commonTest") {
             dependencies {
                 implementation(project(":core:testing"))
                 implementation(libs.kotlin.test)
