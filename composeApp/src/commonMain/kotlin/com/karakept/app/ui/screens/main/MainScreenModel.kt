@@ -275,6 +275,10 @@ class MainScreenModel(
     val aiBatchProgress: StateFlow<AiBatchProgress?> = _aiBatchProgress
     internal var aiBatchJob: kotlinx.coroutines.Job? = null
 
+    // Rows whose progress pull is on the wire. The list reports overlapping stretches as it
+    // scrolls, and a row is only marked fresh once its answer lands.
+    internal val progressPullsInFlight = mutableSetOf<String>()
+
     // What the selected server will let this account do. Probed once per server; see
     // refreshAiCapabilities. Defaults to "summarize yes, admin no" until the probe answers.
     val aiCapabilities: StateFlow<AiCapabilities> =

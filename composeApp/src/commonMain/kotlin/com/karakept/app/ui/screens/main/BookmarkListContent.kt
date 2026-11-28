@@ -59,8 +59,10 @@ import com.karakept.app.ui.utils.trailingPagePaddingFor
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
+import kotlin.time.TimeSource
 
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
@@ -121,8 +123,8 @@ internal fun BookmarkListContent(
      */
     rowActionMode: RowActionMode = RowActionMode.SWIPE,
     /**
-     * Reports the bookmarks currently on screen, so their reading progress can be fetched
-     * ahead of the sync rotation reaching them. Debounced — this fires on scroll.
+     * Reports the bookmarks on screen and the ones scrolling is about to reach, so their
+     * reading progress is fetched before they are looked at. Paced by [ProgressPrefetchPlanner].
      */
     onBookmarksVisible: (List<String>) -> Unit = {}
 ) {
@@ -140,20 +142,39 @@ internal fun BookmarkListContent(
             .collect { currentOnVisibleSlots.value(it) }
     }
 
-    // Report what is on screen once scrolling settles. Debounced rather than per-frame: the
-    // callback issues one network request per never-pulled row, and a fling crosses hundreds.
+    // Report the rows on screen and the ones about to be, so their progress is pulled before
+    // they are looked at. The planner decides when: once per stretch of rows while scrolling at
+    // reading speed, never during a fling, and once more when the list settles.
     val currentOnBookmarksVisible = rememberUpdatedState(onBookmarksVisible)
-    @OptIn(FlowPreview::class)
+    val currentWindow = rememberUpdatedState(window)
+    @OptIn(FlowPreview::class, kotlin.time.ExperimentalTime::class)
     LaunchedEffect(listState) {
-        // Read the rows' keys rather than looking their indices up in the dataset: a sync
-        // re-indexes everything below whatever it prepends, and layoutInfo lags that by a
-        // snapshot, so indices resolved against the new list can name rows that are not on
-        // screen — and their progress would be fetched instead of the ones that are.
-        snapshotFlow {
-            listState.layoutInfo.visibleItemsInfo.mapNotNull { info -> info.key as? String }
+        val planner = ProgressPrefetchPlanner()
+        val clock = TimeSource.Monotonic.markNow()
+        fun report(viewport: VisibleRows, slots: IntRange) {
+            val ids = currentWindow.value.remoteIdsAround(viewport, slots)
+            if (ids.isNotEmpty()) currentOnBookmarksVisible.value(ids)
         }
-            .debounce(400)
-            .collect { ids -> if (ids.isNotEmpty()) currentOnBookmarksVisible.value(ids) }
+        val viewports = snapshotFlow {
+            val visible = listState.layoutInfo.visibleItemsInfo
+            val anchor = visible.firstOrNull { it.key is String }
+            if (visible.isEmpty()) null else VisibleRows(
+                slots = visible.first().index..visible.last().index,
+                anchorKey = anchor?.key as? String,
+                anchorIndex = anchor?.index ?: 0
+            )
+        }.filterNotNull().distinctUntilChanged()
+
+        launch {
+            viewports.collect { viewport ->
+                val total = currentWindow.value.total
+                planner.onScrolled(viewport.slots, total, clock.elapsedNow().inWholeMilliseconds)
+                    ?.let { report(viewport, it) }
+            }
+        }
+        viewports.debounce(400).collect { viewport ->
+            report(viewport, planner.onSettled(viewport.slots, currentWindow.value.total))
+        }
     }
 
     val einkMode = LocalEinkMode.current

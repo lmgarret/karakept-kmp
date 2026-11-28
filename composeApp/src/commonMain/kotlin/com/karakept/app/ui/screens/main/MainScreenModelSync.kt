@@ -48,23 +48,27 @@ internal suspend fun MainScreenModel.refreshStaleSmartList(server: Server, filte
 }
 
 /**
- * Fills in reading progress for the rows currently on screen.
+ * Fills in reading progress for the rows on screen and the ones scrolling is about to reach.
  *
  * The sync pass covers a bounded slice of the library, which leaves rows further down the
- * list showing nothing until a later pass reaches them. Scrolling to them asks for exactly
+ * list showing nothing until a later pass reaches them. Scrolling towards them asks for exactly
  * those, so what the user is looking at is right even when the rotation has not. Only rows
  * whose progress is missing or stale cost a request, so scrolling back and forth is free.
  */
 fun MainScreenModel.onBookmarksVisible(remoteIds: List<String>) {
     val server = _selectedServer.value ?: return
-    if (remoteIds.isEmpty()) return
+    val ids = remoteIds.filter { it !in progressPullsInFlight }
+    if (ids.isEmpty()) return
+    progressPullsInFlight += ids
     viewModelScope.launch {
         try {
-            bookmarkRepository.pullReadingProgressForVisible(server.id, remoteIds)
+            bookmarkRepository.pullReadingProgressForVisible(server.id, ids)
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Exception) {
             AppLogger.d("MainScreenModel", "Visible-row progress pull failed: ${e.message}")
+        } finally {
+            progressPullsInFlight -= ids.toSet()
         }
     }
 }

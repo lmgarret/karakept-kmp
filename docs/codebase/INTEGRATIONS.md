@@ -88,8 +88,10 @@ query per bookmark does not have to mean one request per bookmark.
      the list the user just opened would otherwise skip its own pull whenever another list's
      pass took the slot moments earlier.
   3. *Visible rows* — `pullReadingProgressForVisible`, driven by the list's scroll position,
-     refreshes what is on screen when its progress is missing or older than
-     `VISIBLE_PROGRESS_STALE_AFTER_MS`. Before batching this was the only unbounded path, so
+     refreshes what is on screen, and the rows scrolling is about to reach, when their progress
+     is missing or older than `VISIBLE_PROGRESS_STALE_AFTER_MS`. `ProgressPrefetchPlanner` paces
+     it: a band 40 rows ahead in the direction of travel, asked for again only once the viewport
+     nears its edge, and nothing at all during a fling. Before batching this was the only unbounded path, so
      scrolling was what converged a library; it is now a latency optimisation rather than the
      mechanism.
 
